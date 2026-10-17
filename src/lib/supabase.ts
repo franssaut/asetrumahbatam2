@@ -11,12 +11,17 @@ export interface SupabaseConfig {
   anonKey: string;
 }
 
+function cleanSupabaseUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  return rawUrl.trim().replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
+}
+
 export function getSupabaseConfig(): SupabaseConfig {
   const storedUrl = typeof window !== 'undefined' ? localStorage.getItem(SUPABASE_URL_KEY) : null;
   const storedKey = typeof window !== 'undefined' ? localStorage.getItem(SUPABASE_KEY_KEY) : null;
 
-  const url = storedUrl || import.meta.env.VITE_SUPABASE_URL || '';
-  const anonKey = storedKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  const url = cleanSupabaseUrl(storedUrl || import.meta.env.VITE_SUPABASE_URL || '');
+  const anonKey = (storedKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
   return { url, anonKey };
 }
@@ -56,8 +61,8 @@ export function getSupabase(): SupabaseClient | null {
  * Test Supabase connectivity
  */
 export async function testSupabaseConnection(config?: SupabaseConfig): Promise<{ success: boolean; message: string }> {
-  const targetUrl = config?.url || getSupabaseConfig().url;
-  const targetKey = config?.anonKey || getSupabaseConfig().anonKey;
+  const targetUrl = cleanSupabaseUrl(config?.url || getSupabaseConfig().url);
+  const targetKey = (config?.anonKey || getSupabaseConfig().anonKey).trim();
 
   if (!targetUrl || !targetKey || targetUrl.includes('your-project')) {
     return {
