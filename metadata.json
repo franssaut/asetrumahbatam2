@@ -1,0 +1,6 @@
+{
+  "name": "Aset Rumah Batam",
+  "description": "Platform broker real estat terpercaya di Batam untuk jual beli hunian mewah, ruko komersial, villa, dan tanah dengan pendampingan legalitas UWTO resmi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
