@@ -17,7 +17,7 @@ export interface UserProfile {
   role: 'admin' | 'agent';
   avatarUrl?: string;
   createdAt?: string;
-  provider?: 'email' | 'google' | 'demo';
+  provider?: 'email' | 'demo';
 }
 
 export interface PropertyItem {

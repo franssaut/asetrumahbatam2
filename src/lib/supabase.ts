@@ -516,7 +516,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- Trigger otomatis saat user baru mendaftar di auth.users (Email atau Google OAuth)
+-- Trigger otomatis saat user baru mendaftar di auth.users (Supabase Auth)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN

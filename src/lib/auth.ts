@@ -31,11 +31,6 @@ export const DEMO_USERS: Record<UserProfile['role'], UserProfile> = {
  */
 function mapSupabaseUserToProfile(supabaseUser: any, profileDbRow?: any): UserProfile {
   const metadata = supabaseUser.user_metadata || {};
-  const appMetadata = supabaseUser.app_metadata || {};
-  const isGoogle =
-    appMetadata.provider === 'google' ||
-    metadata.iss?.includes('google') ||
-    (supabaseUser.identities && supabaseUser.identities.some((i: any) => i.provider === 'google'));
   const email = supabaseUser.email || profileDbRow?.email || '';
   const fullName = profileDbRow?.full_name || metadata.full_name || metadata.name || email.split('@')[0];
   const phone = profileDbRow?.phone || metadata.phone || '';
@@ -55,7 +50,7 @@ function mapSupabaseUserToProfile(supabaseUser: any, profileDbRow?: any): UserPr
     phone,
     role,
     avatarUrl,
-    provider: isGoogle ? 'google' : 'email',
+    provider: 'email',
     createdAt: supabaseUser.created_at || profileDbRow?.created_at || new Date().toISOString(),
   };
 }
@@ -427,82 +422,6 @@ export async function resendConfirmationEmail(email: string): Promise<{ success:
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal mengirim ulang email konfirmasi.' };
-  }
-}
-
-/**
- * Sign in directly with a Google account (stores profile in Supabase & local cache)
- */
-export async function loginWithGoogleAccount(params: {
-  email: string;
-  fullName: string;
-  avatarUrl?: string;
-  role?: UserProfile['role'];
-}): Promise<{ success: boolean; user: UserProfile; message?: string }> {
-  const cleanEmail = params.email.trim().toLowerCase();
-  const fullName = params.fullName.trim() || cleanEmail.split('@')[0];
-  const role = params.role || 'agent';
-  const avatarUrl =
-    params.avatarUrl ||
-    `https://lh3.googleusercontent.com/aida-public/AB6AXuAgPgQwXBHXuq5dU8GEVwkKtPAp2kRxnHFlw-RBitntA60HzT-7of9DwJ6tx1T8frCYk7z5v4qVhzAzo9C0uSgi-baRpHDFMaz9inOoOt1CL8KNeBc4J0ZxA09_oYrAvHjOnZolIirXE6bXz0xxoMCjKTCLFPi6wuIRw_pEejZUR-n5-ufUa7ILKgkb0fQh0BkyBEIQrDV0FjEYnl2yM-vNGi2p6jY-Nf89VvAoDz_5l7Dm64LdjWth`;
-
-  const googleUser: UserProfile = {
-    id: 'google_' + btoa(cleanEmail).replace(/[^a-zA-Z0-9]/g, '').slice(0, 16),
-    email: cleanEmail,
-    fullName,
-    role,
-    avatarUrl,
-    provider: 'google',
-    createdAt: new Date().toISOString(),
-  };
-
-  // Sync to Supabase profiles table if available
-  const supabase = getSupabase();
-  if (supabase) {
-    try {
-      await supabase.from('profiles').upsert([
-        {
-          id: googleUser.id,
-          email: cleanEmail,
-          full_name: fullName,
-          role: role,
-          avatar_url: avatarUrl,
-          updated_at: new Date().toISOString(),
-        },
-      ]);
-    } catch (err) {
-      console.warn('Supabase profile sync notice for Google user:', err);
-    }
-  }
-
-  setStoredUser(googleUser);
-  return { success: true, user: googleUser };
-}
-
-/**
- * Sign in with Social Provider (Google OAuth via Supabase)
- */
-export async function signInWithOAuth(provider: 'google'): Promise<{ success: boolean; url?: string; message?: string }> {
-  const supabase = getSupabase();
-  if (!supabase) {
-    return { success: false, message: 'Supabase client belum aktif. Konfigurasi kredensial URL & Key di menu Supabase.' };
-  }
-
-  try {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://asetrumahbatam2.vercel.app';
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${origin}`,
-      },
-    });
-
-    if (error) {
-      return { success: false, message: error.message };
-    }
-    return { success: true, url: data?.url };
-  } catch (err: any) {
-    return { success: false, message: err.message || 'Gagal mengarahkan ke OAuth provider.' };
   }
 }
 
