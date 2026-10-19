@@ -224,7 +224,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   : 'text-white/80 hover:text-white'
               }`}
             >
-              Daftar Baru
+              Daftar Baru (Agent)
             </button>
           </div>
         </div>
@@ -406,7 +406,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
-              <span>Daftar Cepat dengan Akun Google</span>
+              <span>Daftar Cepat Akun Agent dengan Google</span>
             </button>
 
             {/* Divider */}
@@ -474,36 +474,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
+              {/* Peran Akun: Khusus Agent Properti */}
               <div>
                 <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5 uppercase tracking-wider">
-                  Peran / Kategori Akun
+                  Peran Akun Pendaftar Baru
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setRegRole('agent')}
-                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                      regRole === 'agent'
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block text-xs font-bold">👔 Agent</span>
-                    <span className="text-[10px] text-gray-500 font-normal">Konsultan & Listing Properti</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRegRole('admin')}
-                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                      regRole === 'admin'
-                        ? 'border-rose-500 bg-rose-50 text-rose-700 font-bold shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block text-xs font-bold">🛡️ Admin</span>
-                    <span className="text-[10px] text-gray-500 font-normal">Pengelola Portal Properti</span>
-                  </button>
+                <div className="p-3.5 rounded-2xl border border-emerald-300 bg-emerald-50/70 flex items-start sm:items-center gap-3 shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                    <span className="material-symbols-outlined text-[22px]">badge</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm font-bold text-emerald-950">👔 Agent Properti</span>
+                      <span className="text-[10px] bg-emerald-200/90 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Resmi</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-0.5 leading-snug">
+                      Pendaftaran akun baru dikhususkan untuk <strong>Agent Properti</strong> untuk mengunggah dan mengelola listing properti di Batam. (Akun Admin dikelola internal oleh sistem).
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -548,7 +536,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[18px]">person_add</span>
-                    <span>Daftarkan Akun ke Supabase</span>
+                    <span>Daftarkan Akun Agent ke Supabase</span>
                   </>
                 )}
               </button>

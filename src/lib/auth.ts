@@ -251,7 +251,8 @@ export async function signUpWithEmail(data: {
   role?: UserProfile['role'];
 }): Promise<{ success: boolean; user?: UserProfile; message?: string; needsVerification?: boolean }> {
   const cleanEmail = data.email.trim().toLowerCase();
-  const role = data.role || 'agent';
+  // Pendaftaran baru hanya untuk role agent (Admin dikelola khusus oleh sistem)
+  const role: UserProfile['role'] = 'agent';
   const fullName = data.fullName.trim();
   const phone = data.phone?.trim() || '';
 
@@ -466,11 +467,14 @@ export async function updateUserProfile(updates: {
     return { success: false, message: 'Tidak ada sesi pengguna aktif.' };
   }
 
+  // Hanya admin yang dapat mengubah role akun; agent tetap berstatus agent
+  const targetRole = current.role === 'admin' ? (updates.role || current.role) : 'agent';
+
   const updated: UserProfile = {
     ...current,
     fullName: updates.fullName || current.fullName,
     phone: updates.phone !== undefined ? updates.phone : current.phone,
-    role: updates.role || current.role,
+    role: targetRole,
   };
 
   const supabase = getSupabase();

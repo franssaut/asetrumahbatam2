@@ -2604,14 +2604,26 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-[#0e1c2f] mb-1">Peran Akun</label>
-                  <select
-                    value={editRole}
-                    onChange={(e) => setEditRole(e.target.value as UserProfile['role'])}
-                    className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
-                  >
-                    <option value="agent">👔 Agent (Konsultan Properti Resmi)</option>
-                    <option value="admin">🛡️ Administrator (Akses Penuh Portal)</option>
-                  </select>
+                  {user.role === 'admin' ? (
+                    <select
+                      value={editRole}
+                      onChange={(e) => setEditRole(e.target.value as UserProfile['role'])}
+                      className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                    >
+                      <option value="admin">🛡️ Administrator (Akses Penuh Portal)</option>
+                      <option value="agent">👔 Agent (Konsultan Properti Resmi)</option>
+                    </select>
+                  ) : (
+                    <div className="w-full px-3.5 py-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs font-medium text-emerald-800 flex items-center justify-between">
+                      <span className="font-bold flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-emerald-600 text-[18px]">badge</span>
+                        👔 Agent Properti (Resmi)
+                      </span>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded border border-emerald-300">
+                        Tetap
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <button

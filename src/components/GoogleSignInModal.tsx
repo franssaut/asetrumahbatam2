@@ -314,34 +314,21 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-[#0e1c2f] mb-1">
-                  Pilih Peran Akun
+                  Peran Akun Google Baru
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setCustomRole('agent')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-left ${
-                      customRole === 'agent'
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800'
-                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    👔 Agent Properti
-                    <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Kelola listing & klien</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setCustomRole('admin')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-left ${
-                      customRole === 'admin'
-                        ? 'border-rose-500 bg-rose-50 text-rose-800'
-                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    🛡️ Administrator
-                    <span className="block text-[10px] font-normal text-gray-500 mt-0.5">Full approval & ACC</span>
-                  </button>
+                <div className="p-3 rounded-xl border border-emerald-300 bg-emerald-50/80 flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">badge</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-emerald-950">👔 Agent Properti</span>
+                      <span className="text-[9px] bg-emerald-200 text-emerald-800 font-bold px-1.5 py-0.5 rounded">Resmi</span>
+                    </div>
+                    <p className="text-[10px] text-emerald-700 leading-tight mt-0.5">
+                      Pendaftaran akun baru Google otomatis terdaftar sebagai Agent Properti untuk mengunggah dan mengelola listing properti.
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -358,7 +345,7 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[16px]">login</span>
-                    <span>Masuk dengan Akun Google Ini</span>
+                    <span>Daftar / Masuk sebagai Agent dengan Google</span>
                   </>
                 )}
               </button>
