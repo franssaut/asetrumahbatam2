@@ -492,7 +492,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     phone TEXT,
-    role TEXT DEFAULT 'klien' CHECK (role IN ('klien', 'admin')),
+    role TEXT DEFAULT 'agent' CHECK (role IN ('agent', 'admin')),
     avatar_url TEXT
 );
 
@@ -506,7 +506,7 @@ BEGIN
     new.email,
     COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.raw_user_meta_data->>'phone',
-    COALESCE(new.raw_user_meta_data->>'role', 'klien'),
+    COALESCE(new.raw_user_meta_data->>'role', 'agent'),
     COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://ui-avatars.com/api/?name=' || COALESCE(new.raw_user_meta_data->>'full_name', new.email) || '&background=0051d5&color=fff')
   )
   ON CONFLICT (id) DO UPDATE SET

@@ -257,10 +257,10 @@ export default function App() {
                     <p className="text-xs text-gray-400 mb-2">Atau coba demo instan:</p>
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => setCurrentUser(demoLogin('klien'))}
-                        className="p-2 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors"
+                        onClick={() => setCurrentUser(demoLogin('agent'))}
+                        className="p-2 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
                       >
-                        Demo Klien
+                        Demo Agent
                       </button>
                       <button
                         onClick={() => setCurrentUser(demoLogin('admin'))}

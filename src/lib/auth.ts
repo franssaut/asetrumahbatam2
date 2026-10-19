@@ -6,12 +6,12 @@ const FAVORITES_STORAGE_KEY = 'arb_favorite_properties';
 
 // Preset Demo Accounts for testing different user roles
 export const DEMO_USERS: Record<UserProfile['role'], UserProfile> = {
-  klien: {
-    id: 'demo-klien-01',
-    email: 'klien@asetrumahbatam.com',
-    fullName: 'Budi Santoso',
+  agent: {
+    id: 'demo-agent-01',
+    email: 'agent@asetrumahbatam.com',
+    fullName: 'Hendra Wijaya (Senior Agent)',
     phone: '+62 812-7000-8812',
-    role: 'klien',
+    role: 'agent',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: '2025-01-15T08:30:00Z',
   },
@@ -34,8 +34,8 @@ function mapSupabaseUserToProfile(supabaseUser: any, profileDbRow?: any): UserPr
   const email = supabaseUser.email || profileDbRow?.email || '';
   const fullName = profileDbRow?.full_name || metadata.full_name || metadata.name || email.split('@')[0];
   const phone = profileDbRow?.phone || metadata.phone || '';
-  const rawRole = profileDbRow?.role || metadata.role || 'klien';
-  const role: UserProfile['role'] = rawRole === 'admin' ? 'admin' : 'klien';
+  const rawRole = profileDbRow?.role || metadata.role || 'agent';
+  const role: UserProfile['role'] = rawRole === 'admin' ? 'admin' : 'agent';
   const avatarUrl = profileDbRow?.avatar_url || metadata.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=0051d5&color=fff`;
 
   return {
@@ -240,7 +240,7 @@ export async function signUpWithEmail(data: {
   role?: UserProfile['role'];
 }): Promise<{ success: boolean; user?: UserProfile; message?: string; needsVerification?: boolean }> {
   const cleanEmail = data.email.trim().toLowerCase();
-  const role = data.role || 'klien';
+  const role = data.role || 'agent';
   const fullName = data.fullName.trim();
   const phone = data.phone?.trim() || '';
 

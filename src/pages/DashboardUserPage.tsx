@@ -933,9 +933,9 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     switch (role) {
       case 'admin':
         return { label: 'Administrator Portal', color: 'bg-rose-100 text-rose-800 border-rose-300' };
-      case 'klien':
+      case 'agent':
       default:
-        return { label: 'Klien Pembeli / Penjual', color: 'bg-blue-100 text-blue-800 border-blue-300' };
+        return { label: 'Agent Konsultan Properti', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
     }
   };
 
@@ -2233,23 +2233,37 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
               </span>
             </div>
 
-            {/* Sub-view for KLIEN */}
-            {user.role === 'klien' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
-                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">verified_user</span>
-                  <h4 className="font-bold text-sm text-[#0e1c2f]">Jaminan Bebas Sengketa</h4>
-                  <p className="text-xs text-gray-600">Seluruh unit listing di Aset Rumah Batam melewati due-diligence legalitas 4 pilar di BPN & BP Batam.</p>
+            {/* Sub-view for AGENT */}
+            {user.role === 'agent' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Estimasi Saldo Komisi Listing</span>
+                    <p className="text-2xl font-black text-emerald-800">Rp 48.500.000</p>
+                    <p className="text-[11px] text-emerald-700">Standar AREBI 2.5% Closing Transaksi</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Leads Klien Masuk</span>
+                    <p className="text-2xl font-black text-[#0e1c2f]">14 Calon Buyer</p>
+                    <p className="text-[11px] text-gray-500">6 Menunggu Jadwal Survei</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Akreditasi Agent</span>
+                    <p className="text-sm font-bold text-emerald-800 mt-2">AREBI Certified No. 4921</p>
+                    <p className="text-[11px] text-emerald-600">Aktif s/d 2027</p>
+                  </div>
                 </div>
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
-                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">price_change</span>
-                  <h4 className="font-bold text-sm text-[#0e1c2f]">Alert Penurunan Harga</h4>
-                  <p className="text-xs text-gray-600">Dapatkan notifikasi jika listing favorit Anda mengalami penyesuaian harga dari pemilik.</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
-                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">description</span>
-                  <h4 className="font-bold text-sm text-[#0e1c2f]">Draft Akta & Dokumen</h4>
-                  <p className="text-xs text-gray-600">Akses format checklist AJB, Fatwa Planologi, dan formulir perpanjangan UWTO resmi.</p>
+
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
+                  <h4 className="font-bold text-xs text-[#0e1c2f] uppercase mb-2">Tindakan Cepat Agent:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleOpenCreateModal} className="px-3 py-1.5 rounded-lg bg-[#0051d5] text-white text-xs font-semibold cursor-pointer">
+                      + Input Listing Portofolio Baru
+                    </button>
+                    <button onClick={() => setActiveTab('bookings')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold cursor-pointer">
+                      Kelola Janji Temu Klien
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -2379,7 +2393,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                     onChange={(e) => setEditRole(e.target.value as UserProfile['role'])}
                     className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
                   >
-                    <option value="klien">👤 Klien (Pengguna Portal & Titip Listing)</option>
+                    <option value="agent">👔 Agent (Konsultan Properti Resmi)</option>
                     <option value="admin">🛡️ Administrator (Akses Penuh Portal)</option>
                   </select>
                 </div>
@@ -2473,21 +2487,21 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 <h3 className="text-base font-bold text-[#0e1c2f]">Ganti Peran Demo (Testing Cepat)</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Klien atau Admin tanpa perlu logout.
+                Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Agent atau Admin tanpa perlu logout.
               </p>
 
               <div className="space-y-2.5">
                 <button
-                  onClick={() => onUpdateUser(demoLogin('klien'))}
+                  onClick={() => onUpdateUser(demoLogin('agent'))}
                   className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                    user.role === 'klien' ? 'border-[#0051d5] bg-blue-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
+                    user.role === 'agent' ? 'border-emerald-500 bg-emerald-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
                   }`}
                 >
                   <div>
-                    <p className="text-xs font-bold text-[#0e1c2f]">👤 Budi Santoso (Klien Prioritas)</p>
-                    <p className="text-[11px] text-gray-500">Mencari rumah tinggal, titip jual/sewa & investasi di Batam</p>
+                    <p className="text-xs font-bold text-[#0e1c2f]">👔 Hendra Wijaya (Agent Properti ARB)</p>
+                    <p className="text-[11px] text-gray-500">Kelola portofolio listing, closing komisi & jadwal survei</p>
                   </div>
-                  {user.role === 'klien' && <span className="text-xs text-[#0051d5] font-bold">Sedang Aktif</span>}
+                  {user.role === 'agent' && <span className="text-xs text-emerald-600 font-bold">Sedang Aktif</span>}
                 </button>
 
                 <button

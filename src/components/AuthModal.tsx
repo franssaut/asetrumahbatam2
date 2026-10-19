@@ -38,7 +38,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regRole, setRegRole] = useState<UserProfile['role']>('klien');
+  const [regRole, setRegRole] = useState<UserProfile['role']>('agent');
 
   // Forgot password form state
   const [forgotEmail, setForgotEmail] = useState('');
@@ -356,15 +356,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    onClick={() => handleDemoClick('klien')}
-                    className="p-3 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100 hover:border-blue-400 transition-all text-left group cursor-pointer shadow-xs"
+                    onClick={() => handleDemoClick('agent')}
+                    className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100 hover:border-emerald-400 transition-all text-left group cursor-pointer shadow-xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">👤 Klien</span>
-                      <span className="material-symbols-outlined text-blue-600 text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">👔 Agent</span>
+                      <span className="material-symbols-outlined text-emerald-600 text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
                     </div>
-                    <p className="text-xs font-bold text-[#0e1c2f] mt-1.5 line-clamp-1">Budi Santoso</p>
-                    <p className="text-[10px] text-gray-500">Akun Klien / Pembeli</p>
+                    <p className="text-xs font-bold text-[#0e1c2f] mt-1.5 line-clamp-1">Hendra Wijaya</p>
+                    <p className="text-[10px] text-gray-500">Konsultan Agent Properti</p>
                   </button>
 
                   <button
@@ -450,15 +450,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    onClick={() => setRegRole('klien')}
+                    onClick={() => setRegRole('agent')}
                     className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
-                      regRole === 'klien'
-                        ? 'border-[#0051d5] bg-[#eff4ff] text-[#0051d5] font-bold shadow-xs'
+                      regRole === 'agent'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold shadow-xs'
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                     }`}
                   >
-                    <span className="block text-xs font-bold">👤 Klien</span>
-                    <span className="text-[10px] text-gray-500 font-normal">Pembeli / Penjual Properti</span>
+                    <span className="block text-xs font-bold">👔 Agent</span>
+                    <span className="text-[10px] text-gray-500 font-normal">Konsultan & Listing Properti</span>
                   </button>
 
                   <button

@@ -14,7 +14,7 @@ export interface UserProfile {
   email: string;
   fullName: string;
   phone?: string;
-  role: 'admin' | 'klien';
+  role: 'admin' | 'agent';
   avatarUrl?: string;
   createdAt?: string;
 }
