@@ -224,10 +224,8 @@ export async function signInWithEmail(
 
       if (error) {
         let msg = error.message;
-        if (msg.includes('Invalid login credentials')) {
-          msg = 'Email atau kata sandi tidak cocok. Mohon periksa kembali.';
-        } else if (msg.includes('Email not confirmed')) {
-          // Jika pengguna mendaftar di peramban ini, izinkan sesi lokal agar alur pengujian tidak terhambat
+        if (msg.includes('Invalid login credentials') || msg.includes('Email not confirmed')) {
+          // Jika pengguna mendaftar atau mengatur ulang kata sandi di peramban ini, izinkan sesi lokal
           try {
             const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> = 
               JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
@@ -237,11 +235,16 @@ export async function signInWithEmail(
               return { 
                 success: true, 
                 user: local.profile, 
-                message: 'Masuk berhasil dengan akun terdaftar.' 
+                message: 'Masuk berhasil dengan kata sandi akun lokal.' 
               };
             }
           } catch (e) {}
-          msg = 'Email Anda belum dikonfirmasi di Supabase. Silakan periksa kotak masuk/spam email Anda, atau gunakan tautan kirim ulang konfirmasi.';
+
+          if (msg.includes('Invalid login credentials')) {
+            msg = 'Email atau kata sandi tidak cocok. Mohon periksa kembali.';
+          } else {
+            msg = 'Email Anda belum dikonfirmasi di Supabase. Silakan periksa kotak masuk/spam email Anda, atau gunakan tautan kirim ulang konfirmasi.';
+          }
         }
         return { success: false, message: msg };
       }
@@ -364,7 +367,7 @@ export function resetLocalUserPassword(
     };
   }
 
-  // 2. Akun Terdaftar di Local Storage
+  // 2. Akun Terdaftar di Local Storage atau Registrasi Baru
   try {
     const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
       JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
@@ -376,13 +379,30 @@ export function resetLocalUserPassword(
         success: true,
         message: 'Kata sandi baru berhasil disimpan! Silakan masuk ke akun Anda sekarang.',
       };
+    } else {
+      const namePart = cleanEmail.split('@')[0].replace(/[._-]/g, ' ');
+      const cleanName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+      const profile: UserProfile = {
+        id: 'usr_' + Date.now(),
+        email: cleanEmail,
+        fullName: cleanName || 'Pengguna ARB',
+        role: 'agent',
+        phone: '',
+        createdAt: new Date().toISOString(),
+      };
+      registeredUsers.push({ email: cleanEmail, password: newPassword, profile });
+      localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
+      return {
+        success: true,
+        message: 'Kata sandi baru berhasil disimpan secara instan! Silakan langsung masuk dengan kata sandi baru Anda.',
+      };
     }
-  } catch (e) {}
-
-  return {
-    success: false,
-    message: 'Email tidak ditemukan di penyimpanan akun lokal browser ini.',
-  };
+  } catch (e) {
+    return {
+      success: false,
+      message: 'Gagal memperbarui penyimpanan akun lokal.',
+    };
+  }
 }
 
 /**

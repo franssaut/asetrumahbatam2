@@ -808,6 +808,60 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           <strong>Kirim ke Semua Email:</strong> Verifikasi domain Anda di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a> lalu ubah Sender Email menjadi domain Anda.
                         </li>
                       </ul>
+                      {/* Form Solusi Instan di Dalam Kotak Error */}
+                      <div className="mt-2.5 p-3.5 rounded-xl bg-amber-50/95 border-2 border-amber-300 space-y-2">
+                        <div className="flex items-center gap-1.5 text-amber-950 font-bold text-xs sm:text-sm">
+                          <span className="material-symbols-outlined text-[18px] text-amber-600">bolt</span>
+                          <span>Solusi Paling Cepat: Atur Sandi Baru Sekarang (Tanpa Email)</span>
+                        </div>
+                        <p className="text-[11px] text-amber-900 leading-relaxed">
+                          Tidak perlu menunggu email atau memperbaiki SMTP sekarang. Anda dapat langsung menetapkan kata sandi baru untuk <strong>{forgotEmail || loginEmail || 'akun Anda'}</strong>:
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                          <input
+                            type={showInstantLocalPassword ? 'text' : 'password'}
+                            placeholder="Ketik kata sandi baru (min. 6 karakter)"
+                            value={instantLocalPassword}
+                            onChange={(e) => setInstantLocalPassword(e.target.value)}
+                            className="flex-1 px-3 py-2 bg-white rounded-xl border border-amber-300 text-xs text-[#0e1c2f] font-medium outline-none focus:ring-2 focus:ring-[#0051d5]"
+                          />
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setShowInstantLocalPassword(!showInstantLocalPassword)}
+                              className="px-2.5 py-2 text-gray-700 hover:text-black text-[11px] font-bold bg-white rounded-xl border border-gray-300 cursor-pointer"
+                            >
+                              {showInstantLocalPassword ? 'Tutup' : 'Lihat'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!instantLocalPassword || instantLocalPassword.length < 6}
+                              onClick={() => {
+                                const target = forgotEmail.trim() || loginEmail.trim();
+                                if (!target) {
+                                  setErrorMsg('Mohon isi alamat email terlebih dahulu.');
+                                  return;
+                                }
+                                const resetRes = resetLocalUserPassword(target, instantLocalPassword);
+                                if (resetRes.success) {
+                                  setSuccessMsg(resetRes.message);
+                                  setErrorMsg(null);
+                                  setLoginEmail(target);
+                                  setLoginPassword(instantLocalPassword);
+                                  setTimeout(() => handleSwitchTab('login'), 1200);
+                                } else {
+                                  setErrorMsg(resetRes.message);
+                                }
+                              }}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs shrink-0 flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                              <span>Simpan Sandi &amp; Masuk</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="pt-1 flex flex-wrap items-center gap-2">
                         {onOpenSupabaseModal && (
                           <button
@@ -1219,17 +1273,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </div>
                     </div>
 
-                    {/* Bantuan Otomatis jika akun terdaftar di browser ini */}
-                    {forgotEmail.trim() && isLocalRegisteredEmail(forgotEmail) && (
+                    {/* Bantuan Otomatis Reset Sandi Langsung Tanpa Ketergantungan Email */}
+                    {forgotEmail.trim() && forgotEmail.includes('@') && (
                       <div className="p-3.5 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-xs space-y-2.5 animate-in fade-in">
                         <div className="flex items-start gap-2">
                           <span className="material-symbols-outlined text-indigo-600 text-[18px] shrink-0 mt-0.5">offline_bolt</span>
                           <div>
                             <p className="font-bold text-indigo-950">
-                              Akun Ini Terdaftar di Browser Ini!
+                              Opsi 1 (Paling Cepat): Atur Kata Sandi Baru Langsung
                             </p>
                             <p className="text-[11px] text-indigo-800 leading-relaxed mt-0.5">
-                              Jika email SMTP Resend mengalami kendala batasan pengiriman, Anda dapat <strong>langsung mengatur kata sandi baru secara instan</strong> di sini tanpa perlu menunggu email:
+                              Bypass pengiriman email! Anda dapat <strong>langsung mengubah kata sandi akun ini secara instan</strong> di sini tanpa perlu menunggu email masuk:
                             </p>
                           </div>
                         </div>

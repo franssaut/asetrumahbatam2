@@ -452,6 +452,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <p className="text-[11px] text-red-900 leading-relaxed">
                       Akun gratis Resend (<code>onboarding@resend.dev</code>) hanya boleh mengirim email ke <strong>email pemilik akun Resend Anda</strong>. Coba masukkan email tersebut atau buka panduan konfigurasi.
                     </p>
+                    
+                    {/* Form Darurat: Reset Sandi Langsung */}
+                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 space-y-1.5">
+                      <p className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[14px] text-amber-600">bolt</span>
+                        <span>Solusi Instan: Atur Sandi Baru Tanpa Email</span>
+                      </p>
+                      <div className="flex gap-1.5">
+                        <input
+                          type={showInstantLocalPassword ? 'text' : 'password'}
+                          placeholder="Kata sandi baru (min. 6 kar)"
+                          value={instantLocalPassword}
+                          onChange={(e) => setInstantLocalPassword(e.target.value)}
+                          className="flex-1 px-2.5 py-1.5 bg-white rounded-lg border border-amber-300 text-xs text-[#0e1c2f] outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={!instantLocalPassword || instantLocalPassword.length < 6}
+                          onClick={() => {
+                            const target = forgotEmail.trim() || loginEmail.trim();
+                            if (!target) {
+                              setErrorMsg('Mohon isi alamat email terlebih dahulu.');
+                              return;
+                            }
+                            const resetRes = resetLocalUserPassword(target, instantLocalPassword);
+                            if (resetRes.success) {
+                              setSuccessMsg(resetRes.message);
+                              setErrorMsg(null);
+                              setLoginEmail(target);
+                              setLoginPassword(instantLocalPassword);
+                              setTimeout(() => setActiveTab('login'), 1200);
+                            } else {
+                              setErrorMsg(resetRes.message);
+                            }
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs shrink-0"
+                        >
+                          Simpan Sandi
+                        </button>
+                      </div>
+                    </div>
+
                     {onOpenSupabaseModal && (
                       <button
                         type="button"
@@ -797,17 +839,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Bantuan Otomatis jika akun terdaftar di browser ini */}
-                  {forgotEmail.trim() && isLocalRegisteredEmail(forgotEmail) && (
+                  {/* Bantuan Otomatis Reset Sandi Langsung */}
+                  {forgotEmail.trim() && forgotEmail.includes('@') && (
                     <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs space-y-2 animate-in fade-in">
                       <div className="flex items-start gap-1.5">
                         <span className="material-symbols-outlined text-indigo-600 text-[16px] shrink-0 mt-0.5">offline_bolt</span>
                         <div>
                           <p className="font-bold text-indigo-950">
-                            Akun Ini Terdaftar di Browser Ini!
+                            Opsi 1 (Instan Tanpa Email): Atur Sandi Baru Langsung
                           </p>
                           <p className="text-[10px] text-indigo-800 leading-relaxed">
-                            Jika email SMTP Resend dibatasi, Anda dapat <strong>langsung mengubah kata sandi akun ini secara instan</strong> di sini:
+                            Bypass pengiriman email! Anda dapat <strong>langsung mengubah kata sandi akun ini secara instan</strong> di sini:
                           </p>
                         </div>
                       </div>
