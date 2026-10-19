@@ -449,14 +449,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span>{resending ? 'Mengirim...' : 'Kirim Ulang Tautan Konfirmasi Email'}</span>
                   </button>
                 )}
-                {(errorMsg.toLowerCase().includes('recovery email') || errorMsg.toLowerCase().includes('resend')) && (
+                {(errorMsg.toLowerCase().includes('recovery email') || 
+                  errorMsg.toLowerCase().includes('resend') || 
+                  errorMsg.toLowerCase().includes('rate limit') || 
+                  errorMsg.toLowerCase().includes('limit exceeded')) && (
                   <div className="mt-3 p-3 rounded-xl bg-white/90 border border-red-200/90 text-xs space-y-2">
                     <p className="font-bold text-red-950 flex items-center gap-1">
                       <span className="material-symbols-outlined text-[16px] text-amber-600">lightbulb</span>
-                      <span>Petunjuk Cepat Resend / SMTP:</span>
+                      <span>Petunjuk Masalah Email &amp; Rate Limit:</span>
                     </p>
                     <p className="text-[11px] text-red-900 leading-relaxed">
-                      Akun gratis Resend (<code>onboarding@resend.dev</code>) hanya boleh mengirim email ke <strong>email pemilik akun Resend Anda</strong>. Coba masukkan email tersebut atau buka panduan konfigurasi.
+                      Supabase membatasi pengiriman email maksimal 1x per 60 detik (Rate Limit Exceeded). Jika domain masih <code>onboarding@resend.dev</code>, email hanya terkirim ke akun pemilik Resend. Anda bisa langsung membuat sandi baru di bawah ini:
                     </p>
                     
                     {/* Form Darurat: Reset Sandi Langsung */}

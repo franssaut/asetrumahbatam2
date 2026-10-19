@@ -797,21 +797,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       {resending ? 'Mengirim ulang...' : 'Kirim Ulang Email Konfirmasi'}
                     </button>
                   )}
-                  {(errorMsg.toLowerCase().includes('recovery email') || errorMsg.toLowerCase().includes('resend')) && (
+                  {(errorMsg.toLowerCase().includes('recovery email') || 
+                    errorMsg.toLowerCase().includes('resend') || 
+                    errorMsg.toLowerCase().includes('rate limit') || 
+                    errorMsg.toLowerCase().includes('limit exceeded')) && (
                     <div className="mt-3 p-3.5 rounded-xl bg-white/90 border border-rose-200/90 text-xs space-y-2.5">
                       <p className="font-bold text-rose-950 flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[16px] text-amber-600">lightbulb</span>
-                        <span>Langkah Cepat Menyelesaikan Masalah Resend / SMTP:</span>
+                        <span>Penyebab Masalah Pengiriman Email &amp; Solusi:</span>
                       </p>
                       <ul className="list-disc list-inside space-y-1 text-rose-900 text-[11px] leading-relaxed">
                         <li>
-                          <strong>Uji Coba Cepat (Akun Gratis Resend):</strong> Masukkan <em>alamat email akun Resend Anda sendiri</em> di form lupa sandi, karena domain uji coba <code>onboarding@resend.dev</code> hanya diizinkan mengirim ke email pemilik akun.
+                          <strong>Batas Kecepatan (Email Rate Limit Exceeded):</strong> Supabase membatasi pengiriman email ke alamat yang sama maksimal 1x per 60 detik untuk mencegah spam. Mohon beri jeda 1 menit jika ingin mengirim ulang.
                         </li>
                         <li>
-                          <strong>Periksa SMTP Supabase:</strong> Host: <code>smtp.resend.com</code>, Port: <code>465</code>, User: <code>resend</code> (huruf kecil semua, bukan email!), Password: API Key Resend (<code>re_...</code>).
+                          <strong>Akun Uji Coba Resend:</strong> Domain gratis <code>onboarding@resend.dev</code> hanya diizinkan mengirim ke email akun Resend Anda sendiri.
                         </li>
                         <li>
-                          <strong>Kirim ke Semua Email:</strong> Verifikasi domain Anda di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a> lalu ubah Sender Email menjadi domain Anda.
+                          <strong>Pengaturan SMTP Supabase:</strong> Host: <code>smtp.resend.com</code>, Port: <code>465</code>, User: <code>resend</code> (huruf kecil semua!), Password: API Key Resend (<code>re_...</code>).
                         </li>
                       </ul>
                       {/* Form Solusi Instan di Dalam Kotak Error */}

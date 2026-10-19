@@ -958,36 +958,13 @@ export async function resetPasswordForEmail(
     const redirectBase = targetRedirectBase || getAuthRedirectBaseUrl();
     const fullRedirectUrl = `${redirectBase}/login?tab=reset_password`;
 
-    // Percobaan 1: Mengirim dengan custom redirectTo lengkap
-    let { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+    // Kirim permintaan pemulihan kata sandi ke Supabase Auth
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: fullRedirectUrl,
     });
 
-    // Fallback Retry: Jika gagal karena kemungkinan penolakan redirectTo oleh Supabase allowlist
-    if (error && (error.message?.toLowerCase().includes('error sending recovery email') || error.message?.toLowerCase().includes('redirect'))) {
-      try {
-        // Coba dengan redirectBase saja
-        const retry1 = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: redirectBase,
-        });
-        if (!retry1.error) {
-          error = null;
-        } else {
-          // Coba tanpa parameter redirectTo (menggunakan Site URL default Supabase)
-          const retry2 = await supabase.auth.resetPasswordForEmail(cleanEmail);
-          if (!retry2.error) {
-            error = null;
-          } else {
-            error = retry2.error;
-          }
-        }
-      } catch (retryErr) {
-        // Tetap gunakan error asli
-      }
-    }
-
     if (error) {
-      let msg = error.message;
+      const msg = error.message;
       const lower = msg.toLowerCase();
 
       if (lower.includes('user not found')) {
@@ -998,9 +975,10 @@ export async function resetPasswordForEmail(
         lower.includes('error sending recovery email') || 
         lower.includes('error sending confirmation email') || 
         lower.includes('rate limit') || 
-        lower.includes('over_email_send_rate_limit')
+        lower.includes('over_email_send_rate_limit') ||
+        lower.includes('limit exceeded')
       ) {
-        // Otomatis buat Kode OTP Pemulihan Mandiri agar alur pengguna TIDAK terblokir oleh mail server!
+        // Otomatis buat Kode OTP Pemulihan Mandiri agar alur pengguna TIDAK terblokir oleh rate limit mail server!
         const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
         if (typeof window !== 'undefined') {
           try {
@@ -1012,7 +990,7 @@ export async function resetPasswordForEmail(
           success: true,
           isRecoveryEmailError: true,
           fallbackOtp,
-          message: `Sesi pemulihan akun berhasil disiapkan! Gunakan 6-Digit Kode Verifikasi: ${fallbackOtp} di bawah ini untuk langsung menetapkan kata sandi baru Anda.`,
+          message: `Sesi pemulihan akun disiapkan! Batas email Supabase terlampaui (Email Rate Limit Exceeded). Anda dapat langsung menggunakan 6-Digit Kode Verifikasi Mandiri: ${fallbackOtp} di bawah ini untuk menetapkan kata sandi baru.`,
           targetUrl: fullRedirectUrl,
         };
       }
@@ -1055,8 +1033,8 @@ export async function resendConfirmationEmail(email: string): Promise<{ success:
 
     if (error) {
       let msg = error.message;
-      if (msg.includes('rate limit')) {
-        msg = 'Terlalu banyak permintaan pengiriman email konfirmasi. Mohon tunggu beberapa saat.';
+      if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('over_email_send_rate_limit') || msg.toLowerCase().includes('limit exceeded')) {
+        msg = 'Terlalu banyak permintaan pengiriman email (Email Rate Limit Exceeded). Supabase membatasi pengiriman email maksimal 1x per 60 detik. Mohon tunggu 60 detik sebelum mencoba lagi.';
       }
       return { success: false, message: msg };
     }
