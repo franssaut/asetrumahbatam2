@@ -16,12 +16,27 @@ function cleanSupabaseUrl(rawUrl: string): string {
   return rawUrl.trim().replace(/\/rest\/v1\/?$/i, '').replace(/\/+$/, '');
 }
 
-export function getSupabaseConfig(): SupabaseConfig {
-  const storedUrl = typeof window !== 'undefined' ? localStorage.getItem(SUPABASE_URL_KEY) : null;
-  const storedKey = typeof window !== 'undefined' ? localStorage.getItem(SUPABASE_KEY_KEY) : null;
+// Kredensial Resmi Supabase Cloud Project Aset Rumah Batam
+export const DEFAULT_SUPABASE_URL = 'https://ngdhaamejiuoqpppkfkq.supabase.co';
+export const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nZGhhYW1laml1b3FwcHBrZmtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNTE0OTMsImV4cCI6MjEwNzgyNzQ5M30.ZsMtQ6hk87SUGUu5L6tyI62kP2nKkt_j6nSdUvYMfik';
 
-  const url = cleanSupabaseUrl(storedUrl || import.meta.env.VITE_SUPABASE_URL || '');
-  const anonKey = (storedKey || import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+export function getSupabaseConfig(): SupabaseConfig {
+  const rawStoredUrl = typeof window !== 'undefined' ? localStorage.getItem(SUPABASE_URL_KEY) : null;
+  const rawStoredKey = typeof window !== 'undefined' ? localStorage.getItem(SUPABASE_KEY_KEY) : null;
+
+  const storedUrl = rawStoredUrl && rawStoredUrl.trim() !== '' ? rawStoredUrl.trim() : null;
+  const storedKey = rawStoredKey && rawStoredKey.trim() !== '' ? rawStoredKey.trim() : null;
+
+  const envUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) 
+    ? String(import.meta.env.VITE_SUPABASE_URL).trim() 
+    : '';
+  const envKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) 
+    ? String(import.meta.env.VITE_SUPABASE_ANON_KEY).trim() 
+    : '';
+
+  const url = cleanSupabaseUrl(storedUrl || envUrl || DEFAULT_SUPABASE_URL);
+  const anonKey = (storedKey || envKey || DEFAULT_SUPABASE_ANON_KEY).trim();
 
   return { url, anonKey };
 }

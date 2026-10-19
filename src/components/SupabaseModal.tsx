@@ -4,6 +4,8 @@ import {
   setSupabaseConfig,
   testSupabaseConnection,
   SUPABASE_SQL_SCHEMA,
+  DEFAULT_SUPABASE_URL,
+  DEFAULT_SUPABASE_ANON_KEY,
 } from '../lib/supabase';
 
 interface SupabaseModalProps {
@@ -185,7 +187,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
               <button
                 type="button"
                 onClick={handleSave}
-                className="w-full sm:w-auto bg-[#0e1c2f] hover:bg-[#0051d5] text-white px-5 py-2.5 rounded-xl text-[13px] font-bold transition-all"
+                className="w-full sm:w-auto bg-[#0e1c2f] hover:bg-[#0051d5] text-white px-5 py-2.5 rounded-xl text-[13px] font-bold transition-all cursor-pointer"
               >
                 Simpan Konfigurasi
               </button>
@@ -193,7 +195,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
                 type="button"
                 disabled={testing}
                 onClick={handleTest}
-                className="w-full sm:w-auto bg-[#eff4ff] hover:bg-[#dce9ff] text-[#0051d5] border border-[#dbe1ff] px-5 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5"
+                className="w-full sm:w-auto bg-[#eff4ff] hover:bg-[#dce9ff] text-[#0051d5] border border-[#dbe1ff] px-5 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {testing ? (
                   <span>Menguji...</span>
@@ -203,6 +205,19 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
                     <span>Uji Koneksi Supabase</span>
                   </>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setUrl(DEFAULT_SUPABASE_URL);
+                  setAnonKey(DEFAULT_SUPABASE_ANON_KEY);
+                  setSupabaseConfig({ url: DEFAULT_SUPABASE_URL, anonKey: DEFAULT_SUPABASE_ANON_KEY });
+                  setTestResult({ success: true, message: 'Kredensial bawaan Supabase Cloud ARB telah dimuat & disimpan!' });
+                }}
+                className="w-full sm:w-auto bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-4 py-2.5 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">cloud_done</span>
+                <span>Muat Kredensial Default ARB</span>
               </button>
             </div>
           </div>
