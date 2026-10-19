@@ -8,7 +8,14 @@ import {
   updateUserProfile, 
   updateUserPassword 
 } from '../lib/auth';
-import { getSupabase, submitPropertyListing, submitConsultationBooking } from '../lib/supabase';
+import { 
+  getSupabase, 
+  submitPropertyListing, 
+  submitConsultationBooking,
+  savePropertyToSupabase,
+  deletePropertyFromSupabase,
+  getLocalCustomProperties
+} from '../lib/supabase';
 import { getPropertyPath } from '../lib/navigation';
 import { UWTO_TARIFF_DATA, AGENTS_LIST } from '../data/mockData';
 
@@ -19,6 +26,9 @@ interface DashboardUserPageProps {
   onSelectProperty: (property: PropertyItem) => void;
   onLogout: () => void;
   onUpdateUser: (user: UserProfile) => void;
+  onAddProperty?: (property: PropertyItem) => void;
+  onEditProperty?: (property: PropertyItem) => void;
+  onDeleteProperty?: (propertyId: string) => void;
 }
 
 interface LocalSubmission {
@@ -54,8 +64,11 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   onSelectProperty,
   onLogout,
   onUpdateUser,
+  onAddProperty,
+  onEditProperty,
+  onDeleteProperty,
 }) => {
-  type DashboardTab = 'overview' | 'favorites' | 'submissions' | 'bookings' | 'kpr-uwto' | 'role-tools' | 'profile';
+  type DashboardTab = 'overview' | 'favorites' | 'listings' | 'submissions' | 'bookings' | 'kpr-uwto' | 'role-tools' | 'profile';
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -65,6 +78,57 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   // Modals for Quick In-Dashboard Creation
   const [showQuickSubmitModal, setShowQuickSubmitModal] = useState(false);
   const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
+
+  // Full Listing Upload & Edit Modal State
+  const [showListingModal, setShowListingModal] = useState(false);
+  const [listingModalMode, setListingModalMode] = useState<'create' | 'edit'>('create');
+  const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
+
+  // Form Fields for Listing Upload & Edit
+  const [formTitle, setFormTitle] = useState('');
+  const [formCategory, setFormCategory] = useState<PropertyItem['category']>('Perumahan Residensial');
+  const [formIntent, setFormIntent] = useState<'jual' | 'sewa'>('jual');
+  const [formDistrict, setFormDistrict] = useState('Batam Center');
+  const [formLocation, setFormLocation] = useState('Batam Center');
+  const [formAddress, setFormAddress] = useState('');
+  const [formPrice, setFormPrice] = useState<string>('1850000000');
+  const [formPeriod, setFormPeriod] = useState<string>('');
+  const [formLandArea, setFormLandArea] = useState<string>('120');
+  const [formBuildingArea, setFormBuildingArea] = useState<string>('95');
+  const [formBedrooms, setFormBedrooms] = useState<string>('3');
+  const [formBathrooms, setFormBathrooms] = useState<string>('2');
+  const [formLegalStatus, setFormLegalStatus] = useState('Sertifikat HGB Murni (BPN)');
+  const [formUwtoYear, setFormUwtoYear] = useState<string>('2052');
+  const [formUwtoStatus, setFormUwtoStatus] = useState('Aktif s/d 2052 (LMS BP Batam Valid)');
+  const [formImageUrl, setFormImageUrl] = useState('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80');
+  const [formDescription, setFormDescription] = useState('');
+  const [formFacilities, setFormFacilities] = useState<string[]>([
+    'Keamanan 24 Jam & One Gate System',
+    'Row Jalan Lebar (10-14m)',
+    'Air SPAM & Listrik PLN Stabil',
+    'Verifikasi Faktur UWTO Clear BP Batam',
+  ]);
+  const [formStatus, setFormStatus] = useState<'published' | 'draft' | 'sold'>('published');
+  const [formFeatured, setFormFeatured] = useState<boolean>(false);
+  const [isSavingListing, setIsSavingListing] = useState(false);
+
+  // Filter & Search inside listings tab
+  const [listingFilter, setListingFilter] = useState<'all' | 'published' | 'draft' | 'sold'>('all');
+  const [listingSearch, setListingSearch] = useState('');
+  const [listingSubView, setListingSubView] = useState<'properties' | 'submissions'>('properties');
+
+  // Interactive Toast Feedback
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
+
+  // Auto dismiss toast
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // Quick Submission Form State
   const [quickSubType, setQuickSubType] = useState('Perumahan Residensial');
@@ -246,6 +310,296 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     setFavoriteIds(res.favorites);
   };
 
+  const PRESET_IMAGES = [
+    {
+      title: 'Rumah Mewah Modern',
+      url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+    },
+    {
+      title: 'Villa Waterfront Nongsa',
+      url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80',
+    },
+    {
+      title: 'Residensial Minimalis',
+      url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80',
+    },
+    {
+      title: 'Hunian Hook Sukajadi',
+      url: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=1200&q=80',
+    },
+    {
+      title: 'Ruko Bisnis Nagoya',
+      url: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80',
+    },
+    {
+      title: 'Apartemen Penthouse',
+      url: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80',
+    },
+  ];
+
+  const AVAILABLE_FACILITIES = [
+    'Keamanan 24 Jam & One Gate System',
+    'Row Jalan Lebar (10-14m)',
+    'Kolam Renang Privat / Club House',
+    'Smart Home System & CCTV',
+    'Garasi / Carport 2-3 Mobil',
+    'Taman Depan & Belakang Asri',
+    'Air SPAM & Listrik PLN Stabil',
+    'Verifikasi Faktur UWTO Clear BP Batam',
+    'Sertifikat Hak Milik / HGB Clean & Clear',
+    'Dekat Terminal Ferry Batam Center',
+    'Dekat Pusat Kuliner & Mall Nagoya',
+    'View Laut Waterfront Bebas Polusi',
+  ];
+
+  const DISTRICTS_LIST = [
+    'Batam Center',
+    'Sukajadi / KDA',
+    'Nagoya / Lubuk Baja',
+    'Nongsa Waterfront',
+    'Sekupang / Tiban',
+    'Batu Aji / Marina',
+    'Kabil / Punggur',
+    'Bengkong',
+    'Batu Ampar',
+  ];
+
+  // All properties managed by the user / editable in portal
+  const userManagedProperties = useMemo(() => {
+    const customIds = new Set(getLocalCustomProperties().map((p) => p.id.toLowerCase()));
+
+    // In agent or admin mode, they can manage all properties (with custom prioritized)
+    if (user.role === 'agen' || user.role === 'admin') {
+      return properties;
+    }
+
+    // For clients or investors: return all custom created properties + properties with user's ownerId
+    const own = properties.filter(
+      (p) =>
+        customIds.has(p.id.toLowerCase()) ||
+        (p.ownerId && p.ownerId === user.id) ||
+        (p.agentName && p.agentName.toLowerCase() === user.fullName.toLowerCase())
+    );
+
+    // If user hasn't added any custom property yet, provide top catalog properties as interactive starter listings
+    if (own.length === 0) {
+      return properties.slice(0, 4);
+    }
+    return own;
+  }, [properties, user]);
+
+  const filteredManagedProperties = useMemo(() => {
+    return userManagedProperties.filter((p) => {
+      // Filter by status
+      if (listingFilter === 'published' && p.status === 'draft') return false;
+      if (listingFilter === 'published' && p.status === 'sold') return false;
+      if (listingFilter === 'draft' && p.status !== 'draft') return false;
+      if (listingFilter === 'sold' && p.status !== 'sold') return false;
+
+      // Filter by search
+      if (listingSearch.trim()) {
+        const q = listingSearch.toLowerCase();
+        const matches =
+          p.title.toLowerCase().includes(q) ||
+          p.district.toLowerCase().includes(q) ||
+          p.location.toLowerCase().includes(q) ||
+          p.category.toLowerCase().includes(q) ||
+          p.legalStatus.toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  }, [userManagedProperties, listingFilter, listingSearch]);
+
+  const handleOpenCreateModal = () => {
+    setListingModalMode('create');
+    setEditingPropertyId(null);
+    setFormTitle('');
+    setFormCategory('Perumahan Residensial');
+    setFormIntent('jual');
+    setFormDistrict('Batam Center');
+    setFormLocation('Batam Center');
+    setFormAddress('');
+    setFormPrice('1850000000');
+    setFormPeriod('');
+    setFormLandArea('120');
+    setFormBuildingArea('95');
+    setFormBedrooms('3');
+    setFormBathrooms('2');
+    setFormLegalStatus('Sertifikat HGB Murni (BPN)');
+    setFormUwtoYear('2052');
+    setFormUwtoStatus('Aktif s/d 2052 (LMS BP Batam Valid)');
+    setFormImageUrl(PRESET_IMAGES[0].url);
+    setFormDescription('Unit perumahan residensial asri siap huni dengan tata ruang lega, sertifikasi legalitas resmi BPN & BP Batam.');
+    setFormFacilities([
+      'Keamanan 24 Jam & One Gate System',
+      'Row Jalan Lebar (10-14m)',
+      'Air SPAM & Listrik PLN Stabil',
+      'Verifikasi Faktur UWTO Clear BP Batam',
+    ]);
+    setFormStatus('published');
+    setFormFeatured(false);
+    setShowListingModal(true);
+  };
+
+  const handleOpenEditModal = (prop: PropertyItem) => {
+    setListingModalMode('edit');
+    setEditingPropertyId(prop.id);
+    setFormTitle(prop.title);
+    setFormCategory(prop.category);
+    setFormIntent(prop.intent);
+    setFormDistrict(prop.district);
+    setFormLocation(prop.location);
+    setFormAddress(prop.location);
+    setFormPrice(String(prop.price));
+    setFormPeriod(prop.period || '');
+    setFormLandArea(String(prop.landArea));
+    setFormBuildingArea(String(prop.buildingArea));
+    setFormBedrooms(String(prop.bedrooms || 3));
+    setFormBathrooms(String(prop.bathrooms || 2));
+    setFormLegalStatus(prop.legalStatus);
+    setFormUwtoYear(String(prop.uwtoExpiryYear));
+    setFormUwtoStatus(prop.uwtoStatus);
+    setFormImageUrl(prop.imageUrl);
+    setFormDescription(prop.description);
+    setFormFacilities(prop.facilities || []);
+    setFormStatus(prop.status || 'published');
+    setFormFeatured(Boolean(prop.featured));
+    setShowListingModal(true);
+  };
+
+  const handleToggleFacility = (fac: string) => {
+    setFormFacilities((prev) =>
+      prev.includes(fac) ? prev.filter((f) => f !== fac) : [...prev, fac]
+    );
+  };
+
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Ukuran file maksimal 5MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setFormImageUrl(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveListing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formTitle.trim()) {
+      alert('Judul properti wajib diisi');
+      return;
+    }
+
+    setIsSavingListing(true);
+
+    const priceNum = Number(formPrice.replace(/\D/g, '')) || 1000000000;
+    
+    // Generate formatted price
+    let formattedPrice = '';
+    if (priceNum >= 1000000000) {
+      formattedPrice = `Rp ${(priceNum / 1000000000).toLocaleString('id-ID', { maximumFractionDigits: 2 })} Miliar`;
+    } else if (priceNum >= 1000000) {
+      formattedPrice = `Rp ${(priceNum / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 0 })} Juta`;
+    } else {
+      formattedPrice = `Rp ${priceNum.toLocaleString('id-ID')}`;
+    }
+    if (formIntent === 'sewa' && formPeriod) {
+      formattedPrice = `${formattedPrice} ${formPeriod}`;
+    }
+
+    const idToUse =
+      listingModalMode === 'edit' && editingPropertyId
+        ? editingPropertyId
+        : `prop-custom-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const savedProperty: PropertyItem = {
+      id: idToUse,
+      title: formTitle.trim(),
+      category: formCategory,
+      intent: formIntent,
+      district: formDistrict,
+      location: formLocation || formAddress || formDistrict,
+      price: priceNum,
+      priceFormatted: formattedPrice,
+      period: formIntent === 'sewa' ? (formPeriod || '/ tahun') : undefined,
+      landArea: Number(formLandArea) || 120,
+      buildingArea: Number(formBuildingArea) || 90,
+      bedrooms: Number(formBedrooms) || 3,
+      bathrooms: Number(formBathrooms) || 2,
+      uwtoExpiryYear: Number(formUwtoYear) || 2050,
+      uwtoStatus: formUwtoStatus || `Aktif s/d ${formUwtoYear} (LMS BP Batam Valid)`,
+      legalStatus: formLegalStatus,
+      imageUrl: formImageUrl || PRESET_IMAGES[0].url,
+      description: formDescription.trim() || `Properti prestisius dengan sertifikasi legalitas resmi BP Batam, berlokasi sangat strategis di kawasan ${formDistrict}.`,
+      facilities: formFacilities.length > 0 ? formFacilities : ['Keamanan 24 Jam', 'Air SPAM & PLN Stabil'],
+      status: formStatus,
+      featured: formFeatured,
+      ownerId: user.id,
+      agentName: user.fullName || 'Konsultan ARB',
+      agentPhone: user.phone || '+62 823-9105-9216',
+      agentRole: user.role === 'agen' ? 'Agen Resmi Aset Rumah Batam' : 'Pemilik Terverifikasi',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const res = await savePropertyToSupabase(savedProperty);
+      if (listingModalMode === 'edit') {
+        onEditProperty?.(savedProperty);
+      } else {
+        onAddProperty?.(savedProperty);
+      }
+      setToastMessage({
+        type: 'success',
+        text: res.message || `Listing "${savedProperty.title}" berhasil ${listingModalMode === 'edit' ? 'diperbarui' : 'diunggah'} dan disimpan ke Supabase!`
+      });
+      setShowListingModal(false);
+    } catch (err: any) {
+      setToastMessage({
+        type: 'error',
+        text: 'Terjadi kesalahan saat menyimpan listing: ' + (err.message || 'Coba lagi')
+      });
+    } finally {
+      setIsSavingListing(false);
+    }
+  };
+
+  const handleDeleteListing = async (prop: PropertyItem) => {
+    if (!window.confirm(`Hapus listing "${prop.title}" dari database dan website?`)) {
+      return;
+    }
+    try {
+      await deletePropertyFromSupabase(prop.id);
+      onDeleteProperty?.(prop.id);
+      setToastMessage({
+        type: 'success',
+        text: `Listing "${prop.title}" berhasil dihapus dari Supabase dan web.`
+      });
+    } catch (err: any) {
+      setToastMessage({
+        type: 'error',
+        text: 'Gagal menghapus listing: ' + err.message
+      });
+    }
+  };
+
+  const handleQuickStatusChange = async (prop: PropertyItem, newStatus: 'published' | 'draft' | 'sold') => {
+    const updated: PropertyItem = { ...prop, status: newStatus };
+    await savePropertyToSupabase(updated);
+    onEditProperty?.(updated);
+    setToastMessage({
+      type: 'info',
+      text: `Status "${prop.title}" diubah menjadi: ${newStatus === 'published' ? 'Tayang di Web' : newStatus === 'draft' ? 'Draf Simpanan' : 'Terjual / Deal'}`
+    });
+  };
+
   // Submit Quick Listing inside Dashboard
   const handleQuickSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,6 +752,32 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     <div className="min-h-screen bg-[#f8f9ff] py-6 sm:py-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
+        {/* Floating Notification Toast */}
+        {toastMessage && (
+          <div className="fixed top-24 right-4 sm:right-6 z-50 max-w-md animate-in slide-in-from-top-4 duration-300">
+            <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-md ${
+              toastMessage.type === 'success' 
+                ? 'bg-emerald-900/95 text-white border-emerald-500/40' 
+                : toastMessage.type === 'error'
+                ? 'bg-rose-900/95 text-white border-rose-500/40'
+                : 'bg-[#0051d5]/95 text-white border-blue-400/40'
+            }`}>
+              <span className="material-symbols-outlined text-[22px] shrink-0 mt-0.5">
+                {toastMessage.type === 'success' ? 'check_circle' : toastMessage.type === 'error' ? 'error' : 'info'}
+              </span>
+              <div className="flex-1 text-xs leading-relaxed font-semibold">
+                {toastMessage.text}
+              </div>
+              <button 
+                onClick={() => setToastMessage(null)}
+                className="text-white/60 hover:text-white cursor-pointer ml-1"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 1. Header Profile Banner */}
         <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-[#eff4ff]">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -450,19 +830,27 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
             {/* Quick Action Trigger Buttons */}
             <div className="flex flex-wrap items-center gap-2.5">
               <button
+                onClick={handleOpenCreateModal}
+                className="inline-flex items-center gap-1.5 bg-[#0051d5] hover:bg-[#316bf3] active:scale-95 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,81,213,0.25)] transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">add_business</span>
+                + Upload Listing Baru
+              </button>
+
+              <button
                 onClick={() => setShowQuickSubmitModal(true)}
-                className="inline-flex items-center gap-1.5 bg-[#0051d5] hover:bg-[#316bf3] active:scale-95 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,81,213,0.2)] transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 bg-white hover:bg-gray-50 text-gray-700 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border border-gray-200 transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">add_home</span>
-                Titip Properti Cepat
+                Titip Cepat
               </button>
 
               <button
                 onClick={() => setShowQuickBookingModal(true)}
-                className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl border border-[#0051d5]/20 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl border border-[#0051d5]/20 transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">calendar_add_on</span>
-                Jadwalkan Survei
+                Jadwal Survei
               </button>
 
               <button
@@ -495,16 +883,16 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
             </div>
 
             <div 
-              onClick={() => setActiveTab('submissions')}
+              onClick={() => setActiveTab('listings')}
               className="bg-[#eff4ff]/60 hover:bg-[#eff4ff] rounded-2xl p-4 border border-[#0051d5]/15 transition-all cursor-pointer group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">Listing Diajukan</span>
+                <span className="text-xs font-semibold text-gray-500">Kelola Listing</span>
                 <span className="material-symbols-outlined text-emerald-600 text-[20px] group-hover:scale-110 transition-transform">real_estate_agent</span>
               </div>
-              <p className="text-2xl font-black text-[#0e1c2f] mt-1">{submissions.length}</p>
+              <p className="text-2xl font-black text-[#0e1c2f] mt-1">{userManagedProperties.length}</p>
               <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-                {submissions.filter(s => s.status === 'published').length} Unit Tayang
+                {userManagedProperties.filter(p => p.status !== 'draft').length} Unit Tayang di Web
               </p>
             </div>
 
@@ -565,15 +953,18 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('submissions')}
+            onClick={() => {
+              setActiveTab('listings');
+              setListingSubView('properties');
+            }}
             className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === 'submissions'
+              activeTab === 'listings' || activeTab === 'submissions'
                 ? 'bg-[#0051d5] text-white shadow-sm'
                 : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
             }`}
           >
             <span className="material-symbols-outlined text-[18px]">real_estate_agent</span>
-            Listing Titip ({submissions.length})
+            Kelola Listing ({userManagedProperties.length})
           </button>
 
           <button
@@ -638,21 +1029,21 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <button
+                  onClick={handleOpenCreateModal}
+                  className="p-3.5 rounded-2xl bg-[#0051d5] hover:bg-[#316bf3] text-white text-left transition-all shadow-sm group cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-white text-[24px] mb-1 group-hover:scale-110 transition-transform">add_business</span>
+                  <p className="text-xs font-bold text-white">+ Upload Listing Baru</p>
+                  <p className="text-[10px] text-white/80">Input properti ke katalog</p>
+                </button>
+
+                <button
                   onClick={() => onNavigate('katalog-properti')}
                   className="p-3.5 rounded-2xl bg-blue-50/70 hover:bg-blue-100 text-left transition-all border border-blue-100 group cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[#0051d5] text-[24px] mb-1 group-hover:scale-110 transition-transform">explore</span>
                   <p className="text-xs font-bold text-[#0e1c2f]">Jelajahi Katalog</p>
-                  <p className="text-[10px] text-gray-500">Cari rumah mewah & perumahan</p>
-                </button>
-
-                <button
-                  onClick={() => setShowQuickSubmitModal(true)}
-                  className="p-3.5 rounded-2xl bg-emerald-50/70 hover:bg-emerald-100 text-left transition-all border border-emerald-100 group cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-emerald-600 text-[24px] mb-1 group-hover:scale-110 transition-transform">add_business</span>
-                  <p className="text-xs font-bold text-[#0e1c2f]">Titip Jual / Sewa</p>
-                  <p className="text-[10px] text-gray-500">Form pengajuan instan</p>
+                  <p className="text-[10px] text-gray-500">Cari rumah mewah & ruko</p>
                 </button>
 
                 <button
@@ -660,8 +1051,8 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                   className="p-3.5 rounded-2xl bg-amber-50/70 hover:bg-amber-100 text-left transition-all border border-amber-100 group cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-amber-600 text-[24px] mb-1 group-hover:scale-110 transition-transform">savings</span>
-                  <p className="text-xs font-bold text-[#0e1c2f]">Simulasi Angsuran KPR</p>
-                  <p className="text-[10px] text-gray-500">Hitung bunga & cicilan riil</p>
+                  <p className="text-xs font-bold text-[#0e1c2f]">Simulasi KPR & UWTO</p>
+                  <p className="text-[10px] text-gray-500">Hitung bunga & tarif BP Batam</p>
                 </button>
 
                 <button
@@ -966,71 +1357,400 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
         )}
 
         {/* ========================================================= */}
-        {/* TAB 3: PENGAJUAN TITIP PROPERTI (LISTING SAYA)            */}
+        {/* TAB 3: KELOLA & UPLOAD LISTING PROPERTI                    */}
         {/* ========================================================= */}
-        {activeTab === 'submissions' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
+        {(activeTab === 'listings' || activeTab === 'submissions') && (
+          <div className="space-y-6">
+            {/* Header Toolbar */}
+            <div className="bg-white rounded-3xl p-6 border border-[#eff4ff] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h2 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
-                  Riwayat Pengajuan Titip Properti ({submissions.length})
-                </h2>
-                <p className="text-xs text-gray-500">Kelola dan pantau proses verifikasi listing Anda oleh tim legal ARB</p>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[26px]">real_estate_agent</span>
+                  <h2 className="text-lg sm:text-xl font-bold text-[#0e1c2f]">
+                    Kelola & Upload Listing Properti Batam
+                  </h2>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 max-w-2xl">
+                  Upload unit baru dengan foto & legalitas, perbarui harga/spesifikasi (Edit), atur status (Tayang / Draf / Terjual), dan simpan tersinkronisasi langsung ke Supabase Database.
+                </p>
               </div>
-              <button
-                onClick={() => setShowQuickSubmitModal(true)}
-                className="inline-flex items-center gap-1.5 bg-[#0051d5] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#316bf3] transition-all cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[16px]">add_home</span>
-                Titip Properti Baru
-              </button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleOpenCreateModal}
+                  className="inline-flex items-center gap-2 bg-[#0051d5] hover:bg-[#316bf3] active:scale-95 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,81,213,0.25)] transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add_business</span>
+                  + Upload Listing Baru
+                </button>
+
+                <button
+                  onClick={() => setShowQuickSubmitModal(true)}
+                  className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs sm:text-sm font-semibold px-3.5 py-2.5 rounded-xl transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add_home</span>
+                  Titip Cepat
+                </button>
+              </div>
             </div>
 
-            {submissions.length === 0 ? (
-              <div className="bg-white rounded-3xl p-10 text-center border border-[#eff4ff]">
-                <p className="text-sm text-gray-500">Belum ada pengajuan listing properti.</p>
-              </div>
-            ) : (
-              submissions.map((sub, idx) => (
-                <div
-                  key={sub.id || idx}
-                  className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-[#eff4ff] flex flex-col md:flex-row md:items-center justify-between gap-4"
+            {/* Sub-view switcher: Portofolio Listing vs Riwayat Pengajuan Titip */}
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3 flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setListingSubView('properties')}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    listingSubView === 'properties'
+                      ? 'bg-[#0051d5] text-white shadow-xs'
+                      : 'bg-white text-gray-600 hover:text-[#0e1c2f] border border-gray-200'
+                  }`}
                 >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-[#0051d5] uppercase">
-                        {sub.intent || 'Jual'}
-                      </span>
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        {sub.status === 'published' ? 'Tayang di Web' : sub.status === 'appraisal' ? 'Appraisal & Foto HDR' : 'Verifikasi Legalitas ARB'}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-[#0e1c2f] text-base sm:text-lg">{sub.property_type || 'Properti Batam'}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[16px] text-gray-400">pin_drop</span>
-                      {sub.address || sub.region}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-1">
-                      <span>Harga Dititipkan: <strong className="text-[#0e1c2f]">{sub.estimated_price}</strong></span>
-                      <span>Legalitas: <strong className="text-[#0e1c2f]">{sub.legal_status}</strong></span>
-                      {sub.uwto_duration && <span>Status UWTO: <strong className="text-[#0e1c2f]">{sub.uwto_duration}</strong></span>}
-                    </div>
+                  <span className="material-symbols-outlined text-[18px]">apartment</span>
+                  Portofolio Listing Web ({userManagedProperties.length})
+                </button>
+
+                <button
+                  onClick={() => setListingSubView('submissions')}
+                  className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                    listingSubView === 'submissions'
+                      ? 'bg-[#0051d5] text-white shadow-xs'
+                      : 'bg-white text-gray-600 hover:text-[#0e1c2f] border border-gray-200'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">assignment</span>
+                  Riwayat Pengajuan Titip ({submissions.length})
+                </button>
+              </div>
+
+              {listingSubView === 'properties' && (
+                <div className="text-xs text-gray-500 font-medium">
+                  Menampilkan <strong className="text-[#0e1c2f]">{filteredManagedProperties.length}</strong> dari {userManagedProperties.length} unit
+                </div>
+              )}
+            </div>
+
+            {/* VIEW A: PORTOFOLIO LISTING WEB (Upload, Edit, Simpan, Hapus, Status) */}
+            {listingSubView === 'properties' && (
+              <div className="space-y-4">
+                {/* Search & Filter Toolbar */}
+                <div className="bg-white rounded-2xl p-4 border border-[#eff4ff] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Status Chips */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    <button
+                      onClick={() => setListingFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        listingFilter === 'all'
+                          ? 'bg-[#0e1c2f] text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      Semua ({userManagedProperties.length})
+                    </button>
+                    <button
+                      onClick={() => setListingFilter('published')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                        listingFilter === 'published'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                      Tayang di Web ({userManagedProperties.filter((p) => p.status !== 'draft' && p.status !== 'sold').length})
+                    </button>
+                    <button
+                      onClick={() => setListingFilter('draft')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                        listingFilter === 'draft'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                      Draf Simpanan ({userManagedProperties.filter((p) => p.status === 'draft').length})
+                    </button>
+                    <button
+                      onClick={() => setListingFilter('sold')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                        listingFilter === 'sold'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                      Terjual / Deal ({userManagedProperties.filter((p) => p.status === 'sold').length})
+                    </button>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Tim ARB, saya ingin cek progres verifikasi pengajuan properti saya: ${sub.property_type} di ${sub.address || sub.region}`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">chat</span>
-                      Tanya Tim Legal ARB
-                    </a>
+                  {/* Search Bar */}
+                  <div className="relative w-full sm:w-64">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                      search
+                    </span>
+                    <input
+                      type="text"
+                      value={listingSearch}
+                      onChange={(e) => setListingSearch(e.target.value)}
+                      placeholder="Cari judul atau lokasi..."
+                      className="w-full pl-9 pr-8 py-2 rounded-xl bg-gray-50 border border-gray-200 text-xs focus:outline-none focus:border-[#0051d5] focus:bg-white transition-colors"
+                    />
+                    {listingSearch && (
+                      <button
+                        onClick={() => setListingSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">cancel</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))
+
+                {/* Listings Grid */}
+                {filteredManagedProperties.length === 0 ? (
+                  <div className="bg-white rounded-3xl p-12 text-center border border-[#eff4ff]">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-blue-50 flex items-center justify-center text-[#0051d5]">
+                      <span className="material-symbols-outlined text-[32px]">domain_disabled</span>
+                    </div>
+                    <h3 className="text-base font-bold text-[#0e1c2f]">Tidak Ada Listing Ditemukan</h3>
+                    <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
+                      {listingSearch ? `Tidak ada listing yang cocok dengan kata kunci "${listingSearch}".` : 'Belum ada properti dalam kategori status ini.'}
+                    </p>
+                    <button
+                      onClick={handleOpenCreateModal}
+                      className="mt-5 inline-flex items-center gap-2 bg-[#0051d5] hover:bg-[#316bf3] text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-sm transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">add_business</span>
+                      Upload Listing Baru
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {filteredManagedProperties.map((prop) => {
+                      const isDraft = prop.status === 'draft';
+                      const isSold = prop.status === 'sold';
+                      const statusLabel = isDraft ? 'Draf Simpanan' : isSold ? 'Terjual / Deal' : 'Tayang di Web';
+                      const statusColor = isDraft
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : isSold
+                        ? 'bg-blue-100 text-blue-800 border-blue-300'
+                        : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+                      return (
+                        <div
+                          key={prop.id}
+                          className="bg-white rounded-2xl overflow-hidden border border-[#eff4ff] shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
+                        >
+                          <div>
+                            {/* Image Header with Badges */}
+                            <div className="aspect-video relative overflow-hidden bg-gray-100">
+                              <img
+                                src={prop.imageUrl}
+                                alt={prop.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 items-center">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border backdrop-blur-md shadow-xs ${statusColor}`}>
+                                  {statusLabel}
+                                </span>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#0e1c2f]/80 text-white backdrop-blur-md">
+                                  {prop.category}
+                                </span>
+                              </div>
+                              <span className="absolute top-2.5 right-2.5 text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-600 text-white uppercase shadow-xs">
+                                {prop.intent || 'jual'}
+                              </span>
+                            </div>
+
+                            {/* Card Body */}
+                            <div className="p-4 space-y-2.5">
+                              <div>
+                                <p className="text-[11px] font-semibold text-[#0051d5] flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px]">location_on</span>
+                                  {prop.district} • {prop.location}
+                                </p>
+                                <h3 
+                                  onClick={() => handleOpenEditModal(prop)}
+                                  className="font-bold text-sm text-[#0e1c2f] line-clamp-1 mt-0.5 hover:text-[#0051d5] transition-colors cursor-pointer"
+                                  title={prop.title}
+                                >
+                                  {prop.title}
+                                </h3>
+                                <p className="text-base font-black text-[#0051d5] mt-1">
+                                  {prop.priceFormatted}
+                                </p>
+                              </div>
+
+                              {/* Specs Bar */}
+                              <div className="grid grid-cols-3 gap-1.5 py-2 px-2.5 rounded-xl bg-gray-50 border border-gray-100 text-[10px] text-gray-600 text-center">
+                                <div>
+                                  <span className="font-bold text-[#0e1c2f] block">{prop.landArea} m²</span>
+                                  <span>LT / Tanah</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-[#0e1c2f] block">{prop.buildingArea} m²</span>
+                                  <span>LB / Bngn</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold text-[#0e1c2f] block">{prop.uwtoExpiryYear}</span>
+                                  <span>UWTO</span>
+                                </div>
+                              </div>
+
+                              {/* Rooms & Legal */}
+                              <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[14px] text-gray-400">bed</span>
+                                  {prop.bedrooms || 3} KT • {prop.bathrooms || 2} KM
+                                </span>
+                                <span className="truncate max-w-[130px] font-medium text-gray-600" title={prop.legalStatus}>
+                                  {prop.legalStatus}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Toolbar */}
+                          <div className="p-4 pt-0 space-y-2 border-t border-gray-100 mt-2">
+                            {/* Quick Status Selector */}
+                            <div className="flex items-center justify-between pt-2">
+                              <span className="text-[10px] text-gray-400 font-semibold uppercase">Ubah Status:</span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickStatusChange(prop, 'published')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                    prop.status !== 'draft' && prop.status !== 'sold'
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
+                                  }`}
+                                  title="Tayang di Katalog Web"
+                                >
+                                  Tayang
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickStatusChange(prop, 'draft')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                    prop.status === 'draft'
+                                      ? 'bg-amber-600 text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700'
+                                  }`}
+                                  title="Jadikan Draf Simpanan"
+                                >
+                                  Draf
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickStatusChange(prop, 'sold')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                    prop.status === 'sold'
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700'
+                                  }`}
+                                  title="Tandai Sudah Terjual"
+                                >
+                                  Deal
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Buttons: Edit, View on Web, Delete */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <button
+                                onClick={() => handleOpenEditModal(prop)}
+                                className="flex-1 py-2 px-3 rounded-xl bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white font-bold text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit_square</span>
+                                <span>Edit Listing</span>
+                              </button>
+
+                              <button
+                                onClick={() => onSelectProperty(prop)}
+                                className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors cursor-pointer"
+                                title="Lihat Tampilan di Website"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteListing(prop)}
+                                className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer"
+                                title="Hapus Listing dari Supabase"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIEW B: RIWAYAT PENGAJUAN TITIP PROPERTI */}
+            {listingSubView === 'submissions' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-bold text-[#0e1c2f]">
+                    Daftar Formulir Titip Properti Diajukan ({submissions.length})
+                  </h3>
+                  <button
+                    onClick={() => setShowQuickSubmitModal(true)}
+                    className="inline-flex items-center gap-1.5 bg-[#0051d5] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#316bf3] transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add_home</span>
+                    Titip Properti Baru
+                  </button>
+                </div>
+
+                {submissions.length === 0 ? (
+                  <div className="bg-white rounded-3xl p-10 text-center border border-[#eff4ff]">
+                    <p className="text-sm text-gray-500">Belum ada pengajuan titip properti.</p>
+                  </div>
+                ) : (
+                  submissions.map((sub, idx) => (
+                    <div
+                      key={sub.id || idx}
+                      className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-[#eff4ff] flex flex-col md:flex-row md:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-[#0051d5] uppercase">
+                            {sub.intent || 'Jual'}
+                          </span>
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 border border-emerald-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            {sub.status === 'published' ? 'Tayang di Web' : sub.status === 'appraisal' ? 'Appraisal & Foto HDR' : 'Verifikasi Legalitas ARB'}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-[#0e1c2f] text-base sm:text-lg">{sub.property_type || 'Properti Batam'}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[16px] text-gray-400">pin_drop</span>
+                          {sub.address || sub.region}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-1">
+                          <span>Harga Dititipkan: <strong className="text-[#0e1c2f]">{sub.estimated_price}</strong></span>
+                          <span>Legalitas: <strong className="text-[#0e1c2f]">{sub.legal_status}</strong></span>
+                          {sub.uwto_duration && <span>Status UWTO: <strong className="text-[#0e1c2f]">{sub.uwto_duration}</strong></span>}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Tim ARB, saya ingin cek progres verifikasi pengajuan properti saya: ${sub.property_type} di ${sub.address || sub.region}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">chat</span>
+                          Tanya Tim Legal ARB
+                        </a>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         )}
@@ -1891,6 +2611,452 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                   className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {isBookingQuick ? 'Memproses...' : 'Konfirmasi Jadwal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 3: UPLOAD & EDIT LISTING PROPERTI SUPABASE          */}
+      {/* ========================================================= */}
+      {showListingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-md animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-gray-100 max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-[#eff4ff]/40">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-[#0051d5] text-white flex items-center justify-center shadow-xs">
+                  <span className="material-symbols-outlined text-[22px]">
+                    {listingModalMode === 'create' ? 'add_business' : 'edit_document'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
+                    {listingModalMode === 'create' ? 'Upload Listing Properti Baru' : 'Edit Listing Properti'}
+                  </h3>
+                  <p className="text-[11px] text-gray-500">
+                    Disimpan real-time ke Supabase & katalog portal Aset Rumah Batam
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowListingModal(false)}
+                className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveListing} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-xs">
+              {/* Section 1: Transaksi & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-gray-50 border border-gray-100">
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Tipe Transaksi</label>
+                  <div className="grid grid-cols-2 gap-1 bg-white p-1 rounded-xl border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setFormIntent('jual')}
+                      className={`py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                        formIntent === 'jual' ? 'bg-[#0051d5] text-white shadow-xs' : 'text-gray-600 hover:text-[#0e1c2f]'
+                      }`}
+                    >
+                      Jual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormIntent('sewa')}
+                      className={`py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                        formIntent === 'sewa' ? 'bg-[#0051d5] text-white shadow-xs' : 'text-gray-600 hover:text-[#0e1c2f]'
+                      }`}
+                    >
+                      Sewa
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Status Publikasi</label>
+                  <select
+                    value={formStatus}
+                    onChange={(e) => setFormStatus(e.target.value as any)}
+                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold"
+                  >
+                    <option value="published">🟢 Tayang di Web</option>
+                    <option value="draft">🟡 Draf Simpanan</option>
+                    <option value="sold">🔵 Terjual / Deal</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center pt-5 sm:pt-6">
+                  <label className="flex items-center gap-2 cursor-pointer font-semibold text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={formFeatured}
+                      onChange={(e) => setFormFeatured(e.target.checked)}
+                      className="rounded accent-[#0051d5] w-4 h-4 cursor-pointer"
+                    />
+                    <span>Unit Unggulan (Featured)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Section 2: Judul & Kategori & Lokasi */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">
+                    Judul Listing Properti <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    placeholder="Contoh: Rumah Mewah 2 Lantai Siap Huni Hook di Central Hills"
+                    required
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs focus:outline-none focus:border-[#0051d5] focus:bg-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-[#0e1c2f] mb-1">Kategori Properti</label>
+                    <select
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value as any)}
+                      className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                    >
+                      <option value="Perumahan Residensial">Perumahan Residensial</option>
+                      <option value="Rumah Mewah">Rumah Mewah</option>
+                      <option value="Ruko Komersial">Ruko Komersial</option>
+                      <option value="Apartemen">Apartemen Penthouse</option>
+                      <option value="Tanah Kavling">Tanah Kavling</option>
+                      <option value="Villa Waterfront">Villa Waterfront</option>
+                      <option value="Gudang Industri">Gudang Industri</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0e1c2f] mb-1">Distrik Wilayah Batam</label>
+                    <select
+                      value={formDistrict}
+                      onChange={(e) => {
+                        setFormDistrict(e.target.value);
+                        if (!formLocation || formLocation === formDistrict) {
+                          setFormLocation(e.target.value);
+                        }
+                      }}
+                      className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                    >
+                      {DISTRICTS_LIST.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Nama Kompleks / Alamat Spesifik</label>
+                  <input
+                    type="text"
+                    value={formAddress}
+                    onChange={(e) => {
+                      setFormAddress(e.target.value);
+                      setFormLocation(e.target.value);
+                    }}
+                    placeholder="Contoh: Perumahan Orchard Park Blok C-08, Batam Center"
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs focus:outline-none focus:border-[#0051d5] focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Section 3: Harga Properti */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-blue-50/50 border border-blue-100">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-[#0e1c2f]">
+                      Harga (IDR) <span className="text-red-500">*</span>
+                    </label>
+                    <span className="font-black text-[#0051d5] text-[11px]">
+                      {Number(formPrice.replace(/\D/g, '') || 0).toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={formPrice}
+                    onChange={(e) => setFormPrice(e.target.value)}
+                    placeholder="Misal: 1850000000"
+                    required
+                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Keterangan Tambahan / Periode</label>
+                  <input
+                    type="text"
+                    value={formPeriod}
+                    onChange={(e) => setFormPeriod(e.target.value)}
+                    placeholder={formIntent === 'sewa' ? 'Misal: / tahun atau / bulan' : 'Opsional (misal: Nego Tipis)'}
+                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Section 4: Foto Properti (Unggah Fleksibel) */}
+              <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-[#0e1c2f] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[#0051d5] text-[18px]">photo_camera</span>
+                    Foto Properti Utama
+                  </label>
+                  <span className="text-[10px] text-gray-500">File upload / Preset pilihan</span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-4 items-center">
+                  {/* Photo Preview */}
+                  <div className="w-full sm:w-48 aspect-video rounded-xl overflow-hidden bg-gray-200 relative shrink-0 shadow-xs border border-gray-200">
+                    <img
+                      src={formImageUrl}
+                      alt="Pratinjau"
+                      className="w-full h-full object-cover"
+                    />
+                    <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
+                      Preview
+                    </span>
+                  </div>
+
+                  {/* Upload File Input & Custom URL */}
+                  <div className="flex-1 w-full space-y-2">
+                    <div>
+                      <span className="text-[11px] font-semibold text-gray-700 block mb-1">
+                        1. Unggah File Foto dari Perangkat:
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageFileUpload}
+                        className="w-full text-xs text-gray-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#0051d5] file:text-white hover:file:bg-[#316bf3] file:cursor-pointer cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] font-semibold text-gray-700 block mb-1">
+                        2. Atau Masukkan URL Gambar:
+                      </span>
+                      <input
+                        type="url"
+                        value={formImageUrl}
+                        onChange={(e) => setFormImageUrl(e.target.value)}
+                        placeholder="https://..."
+                        className="w-full p-2 rounded-xl bg-white border border-gray-200 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preset Photo Selector */}
+                <div>
+                  <span className="text-[11px] font-semibold text-gray-700 block mb-1.5">
+                    3. Atau Pilih Cepat Foto Contoh Arsitektur Batam:
+                  </span>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {PRESET_IMAGES.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setFormImageUrl(preset.url)}
+                        className={`rounded-lg overflow-hidden border-2 transition-all p-0.5 text-left cursor-pointer group ${
+                          formImageUrl === preset.url ? 'border-[#0051d5] ring-2 ring-[#0051d5]/30' : 'border-transparent hover:border-gray-300'
+                        }`}
+                        title={preset.title}
+                      >
+                        <div className="aspect-video relative rounded overflow-hidden">
+                          <img
+                            src={preset.url}
+                            alt={preset.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                        </div>
+                        <span className="text-[9px] font-medium text-gray-700 truncate block mt-0.5 px-0.5">
+                          {preset.title}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 5: Spesifikasi Dimensi & Ruangan */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Luas Tanah (LT m²)</label>
+                  <input
+                    type="number"
+                    value={formLandArea}
+                    onChange={(e) => setFormLandArea(e.target.value)}
+                    placeholder="120"
+                    min="1"
+                    required
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Luas Bangunan (LB m²)</label>
+                  <input
+                    type="number"
+                    value={formBuildingArea}
+                    onChange={(e) => setFormBuildingArea(e.target.value)}
+                    placeholder="90"
+                    min="1"
+                    required
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Kamar Tidur (KT)</label>
+                  <input
+                    type="number"
+                    value={formBedrooms}
+                    onChange={(e) => setFormBedrooms(e.target.value)}
+                    placeholder="3"
+                    min="0"
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Kamar Mandi (KM)</label>
+                  <input
+                    type="number"
+                    value={formBathrooms}
+                    onChange={(e) => setFormBathrooms(e.target.value)}
+                    placeholder="2"
+                    min="0"
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Section 6: Legalitas & Siklus UWTO BP Batam */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200">
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Status Sertifikat</label>
+                  <select
+                    value={formLegalStatus}
+                    onChange={(e) => setFormLegalStatus(e.target.value)}
+                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold"
+                  >
+                    <option value="Sertifikat HGB Murni (BPN)">Sertifikat HGB Murni (BPN)</option>
+                    <option value="Sertifikat Hak Milik (SHM)">Sertifikat Hak Milik (SHM)</option>
+                    <option value="Hak Pakai WNA (PP 18/2021)">Hak Pakai WNA (PP 18/2021)</option>
+                    <option value="Alokasi BP Batam / SKEP SPJ">Alokasi BP Batam / SKEP SPJ</option>
+                    <option value="Strata Title Apartemen">Strata Title Apartemen</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Tahun Berakhir UWTO</label>
+                  <input
+                    type="number"
+                    value={formUwtoYear}
+                    onChange={(e) => {
+                      setFormUwtoYear(e.target.value);
+                      setFormUwtoStatus(`Aktif s/d ${e.target.value} (LMS BP Batam Valid)`);
+                    }}
+                    placeholder="2052"
+                    min="2024"
+                    max="2080"
+                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#0e1c2f] mb-1">Status Validitas UWTO</label>
+                  <input
+                    type="text"
+                    value={formUwtoStatus}
+                    onChange={(e) => setFormUwtoStatus(e.target.value)}
+                    placeholder="Aktif s/d 2052 (LMS Valid)"
+                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Section 7: Fasilitas */}
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-2">
+                  Fasilitas & Keunggulan Properti (Pilih yang tersedia)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {AVAILABLE_FACILITIES.map((fac) => {
+                    const isSelected = formFacilities.includes(fac);
+                    return (
+                      <button
+                        key={fac}
+                        type="button"
+                        onClick={() => handleToggleFacility(fac)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-[#0051d5] text-white shadow-xs'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[14px]">
+                          {isSelected ? 'check' : 'add'}
+                        </span>
+                        {fac}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 8: Deskripsi */}
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Deskripsi Properti</label>
+                <textarea
+                  rows={3}
+                  value={formDescription}
+                  onChange={(e) => setFormDescription(e.target.value)}
+                  placeholder="Jelaskan keunggulan unit, kondisi bangunan, aksesibilitas fasilitas umum di Batam..."
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs focus:outline-none focus:border-[#0051d5] focus:bg-white leading-relaxed"
+                />
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setShowListingModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingListing}
+                  className="px-6 py-2.5 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-2 shadow-md"
+                >
+                  {isSavingListing ? (
+                    <>
+                      <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin"></span>
+                      <span>Menyimpan ke Supabase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
+                      <span>{listingModalMode === 'create' ? 'Upload & Simpan Listing' : 'Simpan Perubahan Listing'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

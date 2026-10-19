@@ -299,32 +299,169 @@ function mapSupabasePropertyRow(row: any): PropertyItem {
     agentRole: row.agent_role || row.agentRole || 'Konsultan Properti Batam',
     description: row.description || `Properti prestisius dengan sertifikasi legalitas resmi BP Batam, berlokasi sangat strategis di kawasan ${row.location || 'Batam'}.`,
     facilities: row.facilities || ['Verifikasi Faktur UWTO Clear', 'Jalan Aspal Row Lebar', 'Keamanan 24 Jam', 'Air SPAM & Listrik PLN Stabil'],
+    status: (row.status as any) || 'published',
+    ownerId: row.owner_id || row.ownerId || row.user_id || undefined,
+    createdAt: row.created_at || row.createdAt || undefined,
   };
 }
 
+const CUSTOM_PROPERTIES_KEY = 'arb_custom_properties';
+
+export function getLocalCustomProperties(): PropertyItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_PROPERTIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalCustomProperty(property: PropertyItem): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = getLocalCustomProperties();
+    const idx = existing.findIndex((p) => p.id.toLowerCase() === property.id.toLowerCase());
+    if (idx >= 0) {
+      existing[idx] = property;
+    } else {
+      existing.unshift(property);
+    }
+    localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(existing));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function deleteLocalCustomProperty(propertyId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const existing = getLocalCustomProperties();
+    const filtered = existing.filter((p) => p.id.toLowerCase() !== propertyId.toLowerCase());
+    localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(filtered));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 /**
- * Fetch Properties from Supabase with automatic mapping and fallback
+ * Save Property (Upload new or Edit existing) to Supabase and Local Cache
+ */
+export async function savePropertyToSupabase(property: PropertyItem): Promise<{ success: boolean; message?: string }> {
+  // Always save to local persistent storage
+  saveLocalCustomProperty(property);
+
+  const client = getSupabase();
+  if (!client) {
+    return { success: true, message: 'Properti berhasil disimpan di penyimpanan lokal!' };
+  }
+
+  try {
+    const row = {
+      id: property.id,
+      title: property.title,
+      type: property.category,
+      category: property.category,
+      location: property.location,
+      district: property.district,
+      price: property.price,
+      intent: property.intent,
+      period: property.period || null,
+      area: property.landArea,
+      land_area: property.landArea,
+      building_area: property.buildingArea,
+      bedrooms: property.bedrooms || 0,
+      bathrooms: property.bathrooms || 0,
+      uwto_expiry_year: property.uwtoExpiryYear,
+      uwto_status: property.uwtoStatus,
+      legal_status: property.legalStatus,
+      image_url: property.imageUrl,
+      additional_images: property.additionalImages || [],
+      featured: property.featured || false,
+      agent_name: property.agentName,
+      agent_phone: property.agentPhone,
+      agent_role: property.agentRole,
+      description: property.description,
+      facilities: property.facilities || [],
+      status: property.status || 'published',
+      owner_id: property.ownerId || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await client.from('properties').upsert([row]);
+    if (error) {
+      console.warn('Supabase upsert warning, saved locally:', error.message);
+      return { success: true, message: 'Listing tersimpan aman di sistem lokal.' };
+    }
+
+    return { success: true, message: 'Listing berhasil disimpan dan disinkronkan ke Supabase Database!' };
+  } catch (err: any) {
+    console.warn('Supabase save error:', err);
+    return { success: true, message: 'Listing tersimpan di penyimpanan lokal.' };
+  }
+}
+
+/**
+ * Delete Property from Supabase and Local Cache
+ */
+export async function deletePropertyFromSupabase(propertyId: string): Promise<{ success: boolean; message?: string }> {
+  deleteLocalCustomProperty(propertyId);
+
+  const client = getSupabase();
+  if (!client) {
+    return { success: true };
+  }
+
+  try {
+    await client.from('properties').delete().eq('id', propertyId);
+    return { success: true };
+  } catch (err: any) {
+    return { success: true };
+  }
+}
+
+/**
+ * Fetch Properties from Supabase with automatic mapping, local custom overrides, and fallback
  */
 export async function fetchProperties(): Promise<PropertyItem[]> {
+  const customLocal = getLocalCustomProperties();
+  const customMap = new Map(customLocal.map((p) => [p.id.toLowerCase(), p]));
+
   const client = getSupabase();
-  if (!client) return PROPERTIES_LIST;
+  if (!client) {
+    const merged = PROPERTIES_LIST.map((p) => customMap.get(p.id.toLowerCase()) || p);
+    customLocal.forEach((p) => {
+      if (!merged.some((m) => m.id.toLowerCase() === p.id.toLowerCase())) {
+        merged.unshift(p);
+      }
+    });
+    return merged;
+  }
 
   try {
     const { data, error } = await client.from('properties').select('*').order('id', { ascending: true });
-    if (error || !data || data.length === 0) {
-      return PROPERTIES_LIST;
+    let supabaseProperties: PropertyItem[] = [];
+    if (!error && data && data.length > 0) {
+      supabaseProperties = data.map(mapSupabasePropertyRow);
     }
 
-    const supabaseProperties = data.map(mapSupabasePropertyRow);
+    // Merge: Default mocks -> Supabase properties -> User custom local edits on top
+    const combinedMap = new Map<string, PropertyItem>();
     
-    // Merge: Supabase properties first, followed by default mock units that don't share IDs
-    const existingIds = new Set(supabaseProperties.map((p) => p.id.toLowerCase()));
-    const additionalMocks = PROPERTIES_LIST.filter((p) => !existingIds.has(p.id.toLowerCase()));
-    
-    return [...supabaseProperties, ...additionalMocks];
+    PROPERTIES_LIST.forEach((p) => combinedMap.set(p.id.toLowerCase(), p));
+    supabaseProperties.forEach((p) => combinedMap.set(p.id.toLowerCase(), p));
+    customLocal.forEach((p) => combinedMap.set(p.id.toLowerCase(), p));
+
+    return Array.from(combinedMap.values());
   } catch (err) {
     console.warn('Failed to fetch properties from Supabase, falling back to mock data:', err);
-    return PROPERTIES_LIST;
+    const merged = PROPERTIES_LIST.map((p) => customMap.get(p.id.toLowerCase()) || p);
+    customLocal.forEach((p) => {
+      if (!merged.some((m) => m.id.toLowerCase() === p.id.toLowerCase())) {
+        merged.unshift(p);
+      }
+    });
+    return merged;
   }
 }
 

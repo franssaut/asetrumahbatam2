@@ -144,6 +144,24 @@ export default function App() {
     }
   };
 
+  const handleAddProperty = (newProperty: PropertyItem) => {
+    setProperties((prev) => [newProperty, ...prev.filter((p) => p.id.toLowerCase() !== newProperty.id.toLowerCase())]);
+  };
+
+  const handleEditProperty = (updatedProperty: PropertyItem) => {
+    setProperties((prev) => prev.map((p) => (p.id.toLowerCase() === updatedProperty.id.toLowerCase() ? updatedProperty : p)));
+    if (selectedProperty && selectedProperty.id.toLowerCase() === updatedProperty.id.toLowerCase()) {
+      setSelectedProperty(updatedProperty);
+    }
+  };
+
+  const handleDeleteProperty = (propertyId: string) => {
+    setProperties((prev) => prev.filter((p) => p.id.toLowerCase() !== propertyId.toLowerCase()));
+    if (selectedProperty && selectedProperty.id.toLowerCase() === propertyId.toLowerCase()) {
+      setSelectedProperty(null);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#f8f9ff] text-[#0b1c30] selection:bg-[#dbe1ff] selection:text-[#00174b]">
       {/* Top Header Navigation */}
@@ -209,6 +227,9 @@ export default function App() {
               onSelectProperty={handleSelectProperty}
               onLogout={handleLogout}
               onUpdateUser={(updated) => setCurrentUser(updated)}
+              onAddProperty={handleAddProperty}
+              onEditProperty={handleEditProperty}
+              onDeleteProperty={handleDeleteProperty}
             />
           ) : (
             <div className="max-w-xl mx-auto my-16 px-4">
