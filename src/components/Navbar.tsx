@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
           >
             <img
               alt="Aset Rumah Batam Logo"
-              className="h-8 w-auto object-contain transition-transform duration-200 group-hover:scale-105"
+              className="h-9 w-9 rounded-xl object-cover shadow-2xs ring-1 ring-[#0051d5]/15 transition-transform duration-200 group-hover:scale-105"
               src={BRAND_ASSETS.logoUrl}
             />
             <span className="font-bold text-[18px] text-[#0e1c2f] tracking-tight group-hover:text-[#0051d5] transition-colors">

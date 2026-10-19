@@ -1,7 +1,7 @@
 import { PropertyItem, AgentItem, FaqItem } from '../types';
 
 export const BRAND_ASSETS = {
-  logoUrl: 'https://lh3.googleusercontent.com/aida/AEtjO1WKJgMioFi6ttHwHF0IwV6KBXn-WH-rdbqaraJLMK3bKPX9KL7LDmO1ltObd-5L--nibnlUYjAe0rqz947FpUhDODOR03Ri66PdqTW50LdS81XpwcT65ECuVQKrMod93mFWbCCb1TMxhywCmfkbz5p2wILAioVh9Wvay98gArl2_ic4Fu5j_4Ix9SuT9VS2-iYasWnp4S98i70zJYvVNF3RgON6dsNCQ1RZMtc4wocKtUysHx9sMFnGCeg',
+  logoUrl: '/logo.jpg',
   userAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDFPHcnFrhmP0BYA3ykvb948oKWZ_YYC5ZMxhDb6oo3bets5cySpVgqs4xwGK7nX013jX68JKEPp_U_HstRwTm34VzgjQcrgiIDUu9pfUQsjvIkdMSYUVKVIATD3ta66rJKb4KUdfIF286UABXsHrP5Sw2_k2HLq9DMQ_Kr0wlaPd_9UMXAybL7BLyA8zpsYronlUEOWWSSCDnHIhZp_d8ZtWAk_iiaQvaMJZyz0IYvvnUKCbc5eJv',
   officeHq: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAiWxQ5dTHFmt9DWDjuU1LP8O8DbDyyuxncO68zhzNG6DxKs8KL1jVo1thpRWw6WaojYMDhNiF8rPUlxkcZzluVNcloU_EKbMNAVYqsKtYZiilPpvYSckk46f-sArvyIkA4eeCGslWF377eeDSKfAlWX4P1J7pjXZkm65pNWQP62LS4X8-AokAJTGcyww3MQUd6NZkXPcQk1WBGsUIP7tAF0BS3X3b1NIj6sLMrs9aJ0maUBPGadrA6',
   phone: '+62 823-9105-9216',

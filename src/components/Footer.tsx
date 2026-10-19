@@ -37,7 +37,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenSupabaseModal 
               <div className="flex items-center gap-2.5">
                 <img
                   alt="Aset Rumah Batam Logo"
-                  className="h-8 w-auto object-contain brightness-0 invert"
+                  className="h-10 w-10 rounded-xl object-cover ring-1 ring-white/20 shadow-xs"
                   src={BRAND_ASSETS.logoUrl}
                 />
                 <span className="font-bold text-[20px] text-white tracking-tight">
