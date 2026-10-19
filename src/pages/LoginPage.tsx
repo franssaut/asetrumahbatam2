@@ -426,6 +426,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setLoading(true);
     try {
+      // 1. Jika pengguna telah mengisi email & kode OTP, verifikasi dan simpan sekaligus
+      if (forgotEmail.trim() && otpCode.trim()) {
+        const otpRes = await verifyOtpAndResetPassword(forgotEmail, otpCode, newPassword);
+        if (otpRes.success) {
+          setSuccessMsg(otpRes.message);
+          setTimeout(() => {
+            setLoginEmail(forgotEmail);
+            setLoginPassword('');
+            setNewPassword('');
+            setConfirmNewPassword('');
+            setOtpCode('');
+            handleSwitchTab('login');
+          }, 1500);
+          return;
+        } else {
+          setErrorMsg(otpRes.message);
+          return;
+        }
+      }
+
+      // 2. Gunakan sesi pemulihan aktif yang ada
       const res = await updateUserPassword(newPassword);
       if (res.success) {
         setSuccessMsg(res.message || 'Kata sandi berhasil diperbarui! Mengalihkan ke form masuk...');
@@ -439,6 +460,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           handleSwitchTab('login');
         }, 1500);
       } else {
+        // Jika sesi belum aktif atau kadaluarsa, arahkan ke input OTP
+        if (res.message?.toLowerCase().includes('sesi') || res.message?.toLowerCase().includes('otp')) {
+          setShowDirectOtpMode(true);
+          handleSwitchTab('forgot');
+        }
         setErrorMsg(res.message || 'Gagal mengubah kata sandi.');
       }
     } catch (err: any) {
@@ -1592,6 +1618,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="py-3 px-4 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
                   >
                     Batal
+                  </button>
+                </div>
+
+                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/70 text-xs flex items-center justify-between">
+                  <span className="text-blue-950 text-[11px]">Sesi kadaluarsa atau ingin verifikasi dengan kode OTP?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowDirectOtpMode(true);
+                      handleSwitchTab('forgot');
+                    }}
+                    className="text-[#0051d5] font-bold hover:underline cursor-pointer text-[11px] shrink-0"
+                  >
+                    Gunakan 6-Digit OTP →
                   </button>
                 </div>
               </form>
