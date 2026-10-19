@@ -23,7 +23,10 @@ export const KatalogPropertiPage: React.FC<KatalogPropertiPageProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareModalProperty, setShareModalProperty] = useState<PropertyItem | null>(null);
 
-  const activeProperties = propsList && propsList.length > 0 ? propsList : PROPERTIES_LIST;
+  const activeProperties = useMemo(() => {
+    const raw = propsList && propsList.length > 0 ? propsList : PROPERTIES_LIST;
+    return raw.filter((p) => !p.status || p.status === 'published');
+  }, [propsList]);
 
   const handleCopyCardLink = async (e: React.MouseEvent, propId: string) => {
     e.stopPropagation();

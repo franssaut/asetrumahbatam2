@@ -113,12 +113,12 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     'Air SPAM & Listrik PLN Stabil',
     'Verifikasi Faktur UWTO Clear BP Batam',
   ]);
-  const [formStatus, setFormStatus] = useState<'published' | 'draft' | 'sold'>('published');
+  const [formStatus, setFormStatus] = useState<'published' | 'draft' | 'sold' | 'pending'>('published');
   const [formFeatured, setFormFeatured] = useState<boolean>(false);
   const [isSavingListing, setIsSavingListing] = useState(false);
 
   // Filter & Search inside listings tab
-  const [listingFilter, setListingFilter] = useState<'all' | 'published' | 'draft' | 'sold'>('all');
+  const [listingFilter, setListingFilter] = useState<'all' | 'pending' | 'published' | 'draft' | 'sold'>('all');
   const [listingSearch, setListingSearch] = useState('');
   const [listingSubView, setListingSubView] = useState<'properties' | 'submissions'>('properties');
 
@@ -400,11 +400,12 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
 
   const filteredManagedProperties = useMemo(() => {
     return userManagedProperties.filter((p) => {
+      const currentStatus = p.status || 'published';
       // Filter by status
-      if (listingFilter === 'published' && p.status === 'draft') return false;
-      if (listingFilter === 'published' && p.status === 'sold') return false;
-      if (listingFilter === 'draft' && p.status !== 'draft') return false;
-      if (listingFilter === 'sold' && p.status !== 'sold') return false;
+      if (listingFilter === 'pending' && currentStatus !== 'pending') return false;
+      if (listingFilter === 'published' && currentStatus !== 'published') return false;
+      if (listingFilter === 'draft' && currentStatus !== 'draft') return false;
+      if (listingFilter === 'sold' && currentStatus !== 'sold') return false;
 
       // Filter by search
       if (listingSearch.trim()) {
@@ -420,6 +421,23 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       return true;
     });
   }, [userManagedProperties, listingFilter, listingSearch]);
+
+  const pendingListingCount = useMemo(
+    () => userManagedProperties.filter((p) => p.status === 'pending').length,
+    [userManagedProperties]
+  );
+  const publishedListingCount = useMemo(
+    () => userManagedProperties.filter((p) => !p.status || p.status === 'published').length,
+    [userManagedProperties]
+  );
+  const draftListingCount = useMemo(
+    () => userManagedProperties.filter((p) => p.status === 'draft').length,
+    [userManagedProperties]
+  );
+  const soldListingCount = useMemo(
+    () => userManagedProperties.filter((p) => p.status === 'sold').length,
+    [userManagedProperties]
+  );
 
   const handleOpenCreateModal = () => {
     setListingModalMode('create');
@@ -448,7 +466,8 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       'Air SPAM & Listrik PLN Stabil',
       'Verifikasi Faktur UWTO Clear BP Batam',
     ]);
-    setFormStatus('published');
+    // Agent listings default to 'pending' (menunggu ACC Admin); admin defaults to 'published'
+    setFormStatus(user.role === 'agent' ? 'pending' : 'published');
     setFormFeatured(false);
     setShowListingModal(true);
   };
@@ -714,35 +733,45 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
         ? editingPropertyId
         : `prop-custom-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
-    const savedProperty: PropertyItem = {
-      id: idToUse,
-      title: formTitle.trim(),
-      category: formCategory,
-      intent: formIntent,
-      district: formDistrict,
-      location: formLocation || formAddress || formDistrict,
-      price: priceNum,
-      priceFormatted: formattedPrice,
-      period: formIntent === 'sewa' ? (formPeriod || '/ tahun') : undefined,
-      landArea: Number(formLandArea) || 120,
-      buildingArea: Number(formBuildingArea) || 90,
-      bedrooms: Number(formBedrooms) || 3,
-      bathrooms: Number(formBathrooms) || 2,
-      uwtoExpiryYear: Number(formUwtoYear) || 2050,
-      uwtoStatus: formUwtoStatus || `Aktif s/d ${formUwtoYear} (LMS BP Batam Valid)`,
-      legalStatus: formLegalStatus,
-      imageUrl: formImages[0] || PRESET_IMAGES[0].url,
-      additionalImages: formImages.slice(1),
-      description: formDescription.trim() || `Properti prestisius dengan sertifikasi legalitas resmi BP Batam, berlokasi sangat strategis di kawasan ${formDistrict}.`,
-      facilities: formFacilities.length > 0 ? formFacilities : ['Keamanan 24 Jam', 'Air SPAM & PLN Stabil'],
-      status: formStatus,
-      featured: formFeatured,
-      ownerId: user.id,
-      agentName: user.fullName || 'Konsultan ARB',
-      agentPhone: user.phone || '+62 823-9105-9216',
-      agentRole: user.role === 'admin' ? 'Administrator ARB' : 'Pemilik Terverifikasi',
-      createdAt: new Date().toISOString(),
-    };
+      // Enforce approval flow:
+      // If agent saves with publish/pending, it stays 'pending' (held for Admin ACC)
+      // If agent chose 'draft', it remains a private 'draft'
+      let finalStatus: 'published' | 'draft' | 'sold' | 'pending' = formStatus;
+      if (user.role === 'agent') {
+        if (formStatus === 'published' || formStatus === 'pending') {
+          finalStatus = 'pending';
+        }
+      }
+
+      const savedProperty: PropertyItem = {
+        id: idToUse,
+        title: formTitle.trim(),
+        category: formCategory,
+        intent: formIntent,
+        district: formDistrict,
+        location: formLocation || formAddress || formDistrict,
+        price: priceNum,
+        priceFormatted: formattedPrice,
+        period: formIntent === 'sewa' ? (formPeriod || '/ tahun') : undefined,
+        landArea: Number(formLandArea) || 120,
+        buildingArea: Number(formBuildingArea) || 90,
+        bedrooms: Number(formBedrooms) || 3,
+        bathrooms: Number(formBathrooms) || 2,
+        uwtoExpiryYear: Number(formUwtoYear) || 2050,
+        uwtoStatus: formUwtoStatus || `Aktif s/d ${formUwtoYear} (LMS BP Batam Valid)`,
+        legalStatus: formLegalStatus,
+        imageUrl: formImages[0] || PRESET_IMAGES[0].url,
+        additionalImages: formImages.slice(1),
+        description: formDescription.trim() || `Properti prestisius dengan sertifikasi legalitas resmi BP Batam, berlokasi sangat strategis di kawasan ${formDistrict}.`,
+        facilities: formFacilities.length > 0 ? formFacilities : ['Keamanan 24 Jam', 'Air SPAM & PLN Stabil'],
+        status: finalStatus,
+        featured: formFeatured,
+        ownerId: user.id,
+        agentName: user.fullName || 'Konsultan ARB',
+        agentPhone: user.phone || '+62 823-9105-9216',
+        agentRole: user.role === 'admin' ? 'Administrator ARB' : 'Agent Konsultan Properti',
+        createdAt: new Date().toISOString(),
+      };
 
     try {
       const res = await savePropertyToSupabase(savedProperty);
@@ -751,9 +780,15 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       } else {
         onAddProperty?.(savedProperty);
       }
+      let successText = res.message || `Listing "${savedProperty.title}" berhasil ${listingModalMode === 'edit' ? 'diperbarui' : 'diunggah'}!`;
+      if (user.role === 'agent' && finalStatus === 'pending') {
+        successText = `Listing "${savedProperty.title}" berhasil disimpan! Status: ⏳ Menunggu ACC Admin ARB sebelum tayang di katalog publik.`;
+      } else if (user.role === 'admin' && finalStatus === 'published') {
+        successText = `Listing "${savedProperty.title}" berhasil disimpan & langsung Tayang di Website Publik!`;
+      }
       setToastMessage({
         type: 'success',
-        text: res.message || `Listing "${savedProperty.title}" berhasil ${listingModalMode === 'edit' ? 'diperbarui' : 'diunggah'} dan disimpan ke Supabase!`
+        text: successText,
       });
       setShowListingModal(false);
     } catch (err: any) {
@@ -785,13 +820,26 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     }
   };
 
-  const handleQuickStatusChange = async (prop: PropertyItem, newStatus: 'published' | 'draft' | 'sold') => {
+  const handleQuickStatusChange = async (
+    prop: PropertyItem, 
+    newStatus: 'published' | 'draft' | 'sold' | 'pending'
+  ) => {
     const updated: PropertyItem = { ...prop, status: newStatus };
     await savePropertyToSupabase(updated);
     onEditProperty?.(updated);
+    let msg = `Status "${prop.title}" diubah.`;
+    if (newStatus === 'published') {
+      msg = `✅ Listing "${prop.title}" berhasil disetujui (ACC) & sekarang Tayang di Website Publik!`;
+    } else if (newStatus === 'pending') {
+      msg = `⏳ Listing "${prop.title}" statusnya diubah menjadi Menunggu ACC Admin.`;
+    } else if (newStatus === 'draft') {
+      msg = `📁 Listing "${prop.title}" dipindahkan ke Draf Simpanan.`;
+    } else if (newStatus === 'sold') {
+      msg = `🎉 Listing "${prop.title}" ditandai Terjual / Deal!`;
+    }
     setToastMessage({
       type: 'info',
-      text: `Status "${prop.title}" diubah menjadi: ${newStatus === 'published' ? 'Tayang di Web' : newStatus === 'draft' ? 'Draf Simpanan' : 'Terjual / Deal'}`
+      text: msg,
     });
   };
 
@@ -1625,6 +1673,49 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
             {/* VIEW A: PORTOFOLIO LISTING WEB (Upload, Edit, Simpan, Hapus, Status) */}
             {listingSubView === 'properties' && (
               <div className="space-y-4">
+                {/* Admin Alert: Pending Listings Awaiting Approval */}
+                {user.role === 'admin' && pendingListingCount > 0 && (
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-300">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <span className="material-symbols-outlined text-[24px]">pending_actions</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-sm text-amber-950">
+                            Ada {pendingListingCount} Listing Agent Menunggu ACC Admin
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-200 text-amber-900 font-extrabold uppercase">
+                            Perlu Persetujuan
+                          </span>
+                        </div>
+                        <p className="text-xs text-amber-800 mt-0.5">
+                          Postingan properti dari Agent ditahan terlebih dahulu dan tidak tayang di web publik sampai Anda menyetujuinya (ACC).
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setListingFilter('pending')}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0 flex items-center gap-1.5 self-start sm:self-auto shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">visibility</span>
+                      <span>Tinjau Menunggu ACC ({pendingListingCount})</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Agent Notice: Info held listings */}
+                {user.role === 'agent' && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 flex items-start gap-3 shadow-xs">
+                    <span className="material-symbols-outlined text-blue-600 text-[22px] shrink-0 mt-0.5">verified_user</span>
+                    <div className="text-xs text-blue-950">
+                      <strong className="block font-bold">Kebijakan Publikasi Listing Agent ARB:</strong>
+                      Listing properti yang baru Anda upload/ajukan otomatis berstatus <span className="font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200">⏳ Menunggu ACC Admin</span> ({pendingListingCount} unit). Postingan akan ditahan sementara dan akan diverifikasi oleh Admin ARB sebelum tayang di katalog web publik.
+                    </div>
+                  </div>
+                )}
+
                 {/* Search & Filter Toolbar */}
                 <div className="bg-white rounded-2xl p-4 border border-[#eff4ff] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   {/* Status Chips */}
@@ -1640,6 +1731,17 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                       Semua ({userManagedProperties.length})
                     </button>
                     <button
+                      onClick={() => setListingFilter('pending')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                        listingFilter === 'pending'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-amber-50 text-amber-900 hover:bg-amber-100'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                      Menunggu ACC ({pendingListingCount})
+                    </button>
+                    <button
                       onClick={() => setListingFilter('published')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                         listingFilter === 'published'
@@ -1648,18 +1750,18 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                       }`}
                     >
                       <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                      Tayang di Web ({userManagedProperties.filter((p) => p.status !== 'draft' && p.status !== 'sold').length})
+                      Tayang di Web ({publishedListingCount})
                     </button>
                     <button
                       onClick={() => setListingFilter('draft')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                         listingFilter === 'draft'
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                          ? 'bg-gray-700 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
-                      <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                      Draf Simpanan ({userManagedProperties.filter((p) => p.status === 'draft').length})
+                      <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                      Draf Simpanan ({draftListingCount})
                     </button>
                     <button
                       onClick={() => setListingFilter('sold')}
@@ -1670,7 +1772,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                       }`}
                     >
                       <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                      Terjual / Deal ({userManagedProperties.filter((p) => p.status === 'sold').length})
+                      Terjual / Deal ({soldListingCount})
                     </button>
                   </div>
 
@@ -1718,14 +1820,24 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {filteredManagedProperties.map((prop) => {
+                      const isPending = prop.status === 'pending';
                       const isDraft = prop.status === 'draft';
                       const isSold = prop.status === 'sold';
-                      const statusLabel = isDraft ? 'Draf Simpanan' : isSold ? 'Terjual / Deal' : 'Tayang di Web';
-                      const statusColor = isDraft
-                        ? 'bg-amber-100 text-amber-800 border-amber-300'
-                        : isSold
-                        ? 'bg-blue-100 text-blue-800 border-blue-300'
-                        : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                      const isPublished = !isPending && !isDraft && !isSold;
+
+                      let statusLabel = 'Tayang di Web';
+                      let statusColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+                      if (isPending) {
+                        statusLabel = '⏳ Menunggu ACC Admin';
+                        statusColor = 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
+                      } else if (isDraft) {
+                        statusLabel = 'Draf Simpanan';
+                        statusColor = 'bg-gray-100 text-gray-700 border-gray-300';
+                      } else if (isSold) {
+                        statusLabel = 'Terjual / Deal';
+                        statusColor = 'bg-blue-100 text-blue-800 border-blue-300';
+                      }
 
                       return (
                         <div
@@ -1758,6 +1870,17 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                                 </span>
                               )}
                             </div>
+
+                            {/* Held Notice for Pending Listings */}
+                            {isPending && (
+                              <div className="mx-4 mt-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2">
+                                <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">lock_clock</span>
+                                <div className="text-[11px] text-amber-900 leading-snug">
+                                  <strong className="block font-bold">Postingan Ditahan (Pending ACC)</strong>
+                                  Listing belum tayang di katalog website publik. Menunggu verifikasi & ACC dari Administrator ARB.
+                                </div>
+                              </div>
+                            )}
 
                             {/* Card Body */}
                             <div className="p-4 space-y-2.5">
@@ -1809,48 +1932,129 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
 
                           {/* Action Toolbar */}
                           <div className="p-4 pt-0 space-y-2 border-t border-gray-100 mt-2">
-                            {/* Quick Status Selector */}
-                            <div className="flex items-center justify-between pt-2">
-                              <span className="text-[10px] text-gray-400 font-semibold uppercase">Ubah Status:</span>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickStatusChange(prop, 'published')}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
-                                    prop.status !== 'draft' && prop.status !== 'sold'
-                                      ? 'bg-emerald-600 text-white'
-                                      : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
-                                  }`}
-                                  title="Tayang di Katalog Web"
-                                >
-                                  Tayang
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickStatusChange(prop, 'draft')}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
-                                    prop.status === 'draft'
-                                      ? 'bg-amber-600 text-white'
-                                      : 'bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700'
-                                  }`}
-                                  title="Jadikan Draf Simpanan"
-                                >
-                                  Draf
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleQuickStatusChange(prop, 'sold')}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
-                                    prop.status === 'sold'
-                                      ? 'bg-blue-600 text-white'
-                                      : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700'
-                                  }`}
-                                  title="Tandai Sudah Terjual"
-                                >
-                                  Deal
-                                </button>
+                            {/* Role-Aware Status & Approval Actions */}
+                            {user.role === 'admin' ? (
+                              <div className="pt-2">
+                                {isPending ? (
+                                  <div className="space-y-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickStatusChange(prop, 'published')}
+                                      className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                                    >
+                                      <span className="material-symbols-outlined text-[17px]">verified</span>
+                                      <span>ACC & Tayangkan Listing</span>
+                                    </button>
+                                    <div className="flex items-center justify-between text-[11px] px-1">
+                                      <span className="text-gray-400 font-medium text-[10px]">Opsi lain:</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatusChange(prop, 'draft')}
+                                        className="text-gray-500 hover:text-amber-800 font-semibold cursor-pointer text-[10px]"
+                                      >
+                                        Tolak ke Draf
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-gray-400 font-semibold uppercase">Ubah Status:</span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatusChange(prop, 'published')}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                          isPublished
+                                            ? 'bg-emerald-600 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'
+                                        }`}
+                                        title="Tayang di Katalog Web"
+                                      >
+                                        Tayang
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatusChange(prop, 'pending')}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                          isPending
+                                            ? 'bg-amber-500 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-amber-50 hover:text-amber-700'
+                                        }`}
+                                        title="Tahan / Menunggu Review ACC"
+                                      >
+                                        Pending
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatusChange(prop, 'draft')}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                          isDraft
+                                            ? 'bg-gray-700 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                        title="Jadikan Draf Simpanan"
+                                      >
+                                        Draf
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickStatusChange(prop, 'sold')}
+                                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                                          isSold
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-700'
+                                        }`}
+                                        title="Tandai Sudah Terjual"
+                                      >
+                                        Deal
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </div>
+                            ) : (
+                              /* Agent View: Clear status indicator and submission actions */
+                              <div className="flex items-center justify-between pt-2">
+                                <span className="text-[10px] text-gray-400 font-semibold uppercase">Status:</span>
+                                <div className="flex items-center gap-1.5">
+                                  {isPending ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                      <span className="material-symbols-outlined text-[12px]">hourglass_top</span>
+                                      Menunggu ACC Admin
+                                    </span>
+                                  ) : isPublished ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                                      Tayang (Approved)
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-300">
+                                      Draf Pribadi
+                                    </span>
+                                  )}
+                                  {isDraft && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickStatusChange(prop, 'pending')}
+                                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#0051d5] hover:bg-blue-100 cursor-pointer"
+                                      title="Kirim pengajuan ke Admin untuk di-ACC"
+                                    >
+                                      Ajukan ACC
+                                    </button>
+                                  )}
+                                  {isPending && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickStatusChange(prop, 'draft')}
+                                      className="text-[10px] font-semibold text-gray-500 hover:text-amber-800 cursor-pointer"
+                                      title="Kembalikan ke draf pribadi"
+                                    >
+                                      Ke Draf
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
 
                             {/* Buttons: Edit, View on Web, Delete */}
                             <div className="flex items-center gap-1.5 pt-1">
@@ -2862,15 +3066,33 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
 
                 <div>
                   <label className="block font-bold text-[#0e1c2f] mb-1">Status Publikasi</label>
-                  <select
-                    value={formStatus}
-                    onChange={(e) => setFormStatus(e.target.value as any)}
-                    className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold"
-                  >
-                    <option value="published">🟢 Tayang di Web</option>
-                    <option value="draft">🟡 Draf Simpanan</option>
-                    <option value="sold">🔵 Terjual / Deal</option>
-                  </select>
+                  {user.role === 'agent' ? (
+                    <div>
+                      <select
+                        value={formStatus}
+                        onChange={(e) => setFormStatus(e.target.value as any)}
+                        className="w-full p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-xs font-semibold text-amber-900"
+                      >
+                        <option value="pending">⏳ Ajukan ke Admin (Menunggu ACC)</option>
+                        <option value="draft">🟡 Simpan Draf Pribadi (Belum Diajukan)</option>
+                      </select>
+                      <p className="text-[10px] text-amber-700 mt-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">info</span>
+                        Postingan Agent akan ditahan & di-ACC Admin sebelum tampil di web publik.
+                      </p>
+                    </div>
+                  ) : (
+                    <select
+                      value={formStatus}
+                      onChange={(e) => setFormStatus(e.target.value as any)}
+                      className="w-full p-2.5 rounded-xl bg-white border border-gray-200 text-xs font-semibold"
+                    >
+                      <option value="published">🟢 Tayang Langsung di Web</option>
+                      <option value="pending">⏳ Tahan / Menunggu Review ACC</option>
+                      <option value="draft">🟡 Draf Simpanan</option>
+                      <option value="sold">🔵 Terjual / Deal</option>
+                    </select>
+                  )}
                 </div>
 
                 <div className="flex items-center pt-5 sm:pt-6">
@@ -3432,8 +3654,18 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined text-[18px]">cloud_upload</span>
-                      <span>{listingModalMode === 'create' ? 'Upload & Simpan Listing' : 'Simpan Perubahan Listing'}</span>
+                      <span className="material-symbols-outlined text-[18px]">
+                        {user.role === 'agent' && formStatus !== 'draft' ? 'approval' : 'cloud_upload'}
+                      </span>
+                      <span>
+                        {user.role === 'agent'
+                          ? formStatus === 'draft'
+                            ? 'Simpan Draf Pribadi'
+                            : 'Upload & Ajukan Listing (Menunggu ACC)'
+                          : listingModalMode === 'create'
+                          ? 'Upload & Simpan Listing'
+                          : 'Simpan Perubahan Listing'}
+                      </span>
                     </>
                   )}
                 </button>

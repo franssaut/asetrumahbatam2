@@ -44,7 +44,7 @@ export interface PropertyItem {
   agentRole: string;
   description: string;
   facilities: string[];
-  status?: 'published' | 'draft' | 'sold';
+  status?: 'published' | 'draft' | 'sold' | 'pending';
   ownerId?: string;
   createdAt?: string;
 }

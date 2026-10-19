@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PageId, PropertyItem } from '../types';
 import { PROPERTIES_LIST, AGENTS_LIST, BRAND_ASSETS } from '../data/mockData';
 import { getPropertyPath, copyPropertyLinkToClipboard } from '../lib/navigation';
@@ -21,7 +21,10 @@ export const BerandaPage: React.FC<BerandaPageProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareModalProperty, setShareModalProperty] = useState<PropertyItem | null>(null);
 
-  const activeProperties = propsList && propsList.length > 0 ? propsList : PROPERTIES_LIST;
+  const activeProperties = useMemo(() => {
+    const raw = propsList && propsList.length > 0 ? propsList : PROPERTIES_LIST;
+    return raw.filter((p) => !p.status || p.status === 'published');
+  }, [propsList]);
   const featuredProperties = activeProperties.slice(0, 4);
 
   const handleCopyCardLink = async (e: React.MouseEvent, propId: string) => {

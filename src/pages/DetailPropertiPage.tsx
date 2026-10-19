@@ -131,6 +131,24 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
           </div>
         </div>
 
+        {/* Pending Approval Notice Banner */}
+        {currentProperty.status === 'pending' && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3 shadow-xs animate-in fade-in duration-300">
+            <span className="material-symbols-outlined text-amber-600 text-[24px] shrink-0 mt-0.5">lock_clock</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-amber-950">Pratinjau Listing Agent: Menunggu ACC Admin</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] bg-amber-200 text-amber-900 font-extrabold uppercase">
+                  Ditahan / Belum Tayang
+                </span>
+              </div>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Listing ini baru diajukan oleh Agent dan sedang dalam proses verifikasi legalitas oleh Administrator ARB. Listing belum dapat diakses oleh pengunjung umum di katalog publik.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Header Title & Price Bar */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-[#e5eeff]">
           <div className="space-y-1">
