@@ -1234,9 +1234,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           <span className="material-symbols-outlined text-[18px]">lock_reset</span>
                           <span>Pemulihan Kata Sandi Akun</span>
                         </p>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-[#0051d5] text-[10px] font-bold">
-                          <span>✉️</span> Resend SMTP
-                        </span>
+                        {onOpenSupabaseModal ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenSupabaseModal('resend')}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100 hover:bg-blue-200 text-[#0051d5] text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+                            title="Buka Panduan & Kredensial Resend"
+                          >
+                            <span>✉️</span>
+                            <span>Integrasi Resend.com →</span>
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-[#0051d5] text-[10px] font-bold">
+                            <span>✉️</span> Resend SMTP
+                          </span>
+                        )}
                       </div>
                       <p>
                         Masukkan alamat email akun Anda. Supabase Auth didukung infrastruktur <strong>Resend Email</strong> akan mengirimkan tautan aman dan <strong>6-digit kode OTP</strong> ke kotak masuk Anda.
