@@ -118,9 +118,13 @@ export function initSupabaseAuth(onUserChange?: (user: UserProfile | null) => vo
     }
   });
 
-  // 2. Listen to real-time auth changes (sign in, sign out, token refresh)
+  // 2. Listen to real-time auth changes (sign in, sign out, token refresh, password recovery)
   const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+    if (event === 'PASSWORD_RECOVERY') {
+      window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: session }));
+    }
+
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED' || event === 'PASSWORD_RECOVERY') {
       if (session?.user) {
         let profileRow: any = null;
         try {
@@ -510,8 +514,23 @@ export async function signUpWithEmail(data: {
  */
 export async function resetPasswordForEmail(email: string): Promise<{ success: boolean; message: string }> {
   const cleanEmail = email.trim().toLowerCase();
-  const supabase = getSupabase();
+  if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+    return {
+      success: false,
+      message: 'Format alamat email tidak valid.',
+    };
+  }
 
+  // Cek apakah akun demo
+  const isDemo = Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail);
+  if (isDemo) {
+    return {
+      success: true,
+      message: `Tautan pemulihan simulasi telah disiapkan untuk akun demo ${cleanEmail}. Akun demo dapat langsung digunakan tanpa reset sandi.`,
+    };
+  }
+
+  const supabase = getSupabase();
   if (!supabase) {
     return {
       success: false,
@@ -522,11 +541,18 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
   try {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://asetrumahbatam2.vercel.app';
     const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${origin}/dashboard`,
+      redirectTo: `${origin}/login?tab=reset_password`,
     });
 
     if (error) {
-      return { success: false, message: error.message };
+      let msg = error.message;
+      const lower = msg.toLowerCase();
+      if (lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
+        msg = 'Terlalu banyak permintaan kirim ulang. Mohon tunggu sekitar 60 detik sebelum mengirim ulang tautan pemulihan.';
+      } else if (lower.includes('user not found')) {
+        msg = 'Email tidak ditemukan di Supabase Auth. Mohon periksa kembali alamat email Anda.';
+      }
+      return { success: false, message: msg };
     }
 
     return {
@@ -634,17 +660,36 @@ export async function updateUserProfile(updates: {
  * Update user password in Supabase Auth
  */
 export async function updateUserPassword(newPassword: string): Promise<{ success: boolean; message: string }> {
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, message: 'Kata sandi minimal 6 karakter demi keamanan akun Anda.' };
+  }
+
   const supabase = getSupabase();
   if (!supabase) {
     return { success: false, message: 'Supabase belum terhubung.' };
   }
 
   try {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
       return { success: false, message: error.message };
     }
-    return { success: true, message: 'Kata sandi berhasil diperbarui di Supabase Auth!' };
+
+    // Sinkronkan ke local storage jika email terdaftar
+    const userEmail = data?.user?.email;
+    if (userEmail) {
+      try {
+        const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+          JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+        const idx = registeredUsers.findIndex((u) => u.email.toLowerCase() === userEmail.toLowerCase());
+        if (idx >= 0) {
+          registeredUsers[idx].password = newPassword;
+          localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
+        }
+      } catch (e) {}
+    }
+
+    return { success: true, message: 'Kata sandi baru berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.' };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal mengubah kata sandi.' };
   }
