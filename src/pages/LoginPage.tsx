@@ -8,7 +8,10 @@ import {
   resetPasswordForEmail, 
   resendConfirmationEmail,
   checkEmailExists,
-  updateUserPassword
+  updateUserPassword,
+  activateRecoverySessionFromUrl,
+  getAuthRedirectBaseUrl,
+  DEFAULT_PRODUCTION_URL
 } from '../lib/auth';
 import { getSupabaseConfig } from '../lib/supabase';
 
@@ -56,6 +59,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [resendCountdown, setResendCountdown] = useState(0);
   const [resendCount, setResendCount] = useState(1);
 
+  // Recovery URL / Token Paste State (Solusi error redirect ke localhost)
+  const [showRecoveryPaste, setShowRecoveryPaste] = useState(false);
+  const [recoveryInputUrl, setRecoveryInputUrl] = useState('');
+  const [recoveryActivating, setRecoveryActivating] = useState(false);
+  const [activeSiteUrl, setActiveSiteUrl] = useState(() => getAuthRedirectBaseUrl());
+
   // Set New Password State (after clicking reset link)
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -64,6 +73,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   const supabaseConfig = getSupabaseConfig();
   const isSupabaseActive = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
+
+  // Sync site url changes
+  useEffect(() => {
+    const handleSiteUrlChange = (e: any) => {
+      setActiveSiteUrl(e.detail || getAuthRedirectBaseUrl());
+    };
+    window.addEventListener('arb_site_url_changed', handleSiteUrlChange);
+    return () => window.removeEventListener('arb_site_url_changed', handleSiteUrlChange);
+  }, []);
 
   // Cooldown countdown timer for resending reset email
   useEffect(() => {
@@ -263,7 +281,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setLoading(true);
     try {
-      const res = await resetPasswordForEmail(targetEmail);
+      const res = await resetPasswordForEmail(targetEmail, activeSiteUrl);
       if (res.success) {
         setForgotSent(true);
         setResendCountdown(60);
@@ -291,11 +309,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setResending(true);
     handleClearAlerts();
     try {
-      const res = await resetPasswordForEmail(targetEmail);
+      const res = await resetPasswordForEmail(targetEmail, activeSiteUrl);
       if (res.success) {
         setResendCount((prev) => prev + 1);
         setResendCountdown(60);
-        setSuccessMsg(`Tautan pemulihan baru berhasil dikirim ulang ke ${targetEmail}! Silakan periksa kotak masuk atau spam email Anda.`);
+        setSuccessMsg(`Tautan pemulihan baru berhasil dikirim ulang ke ${targetEmail}! Tautan mengarah ke: ${activeSiteUrl}`);
       } else {
         setErrorMsg(res.message);
       }
@@ -303,6 +321,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setErrorMsg(err.message || 'Gagal mengirim ulang tautan reset kata sandi.');
     } finally {
       setResending(false);
+    }
+  };
+
+  // 4b. Handle Manual Token/URL Paste Recovery (Solusi instan jika link email nyasar ke localhost)
+  const handleActivateManualRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryInputUrl.trim()) {
+      setErrorMsg('Mohon masukkan tautan atau token dari email Anda.');
+      return;
+    }
+
+    setRecoveryActivating(true);
+    handleClearAlerts();
+    try {
+      const res = await activateRecoverySessionFromUrl(recoveryInputUrl);
+      if (res.success) {
+        setSuccessMsg(res.message);
+        setActiveTab('reset_password');
+        setRecoveryInputUrl('');
+      } else {
+        setErrorMsg(res.message);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal mengaktifkan sesi pemulihan.');
+    } finally {
+      setRecoveryActivating(false);
     }
   };
 
@@ -1005,6 +1049,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </p>
                     </div>
 
+                    {/* Indikator Domain Redirect */}
+                    <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                      <div>
+                        <span className="font-bold flex items-center gap-1 text-amber-900">
+                          <span className="material-symbols-outlined text-[15px] text-amber-700">link</span>
+                          <span>Tautan email akan mengarah ke:</span>
+                        </span>
+                        <span className="font-mono text-amber-800 font-semibold break-all">{activeSiteUrl}</span>
+                      </div>
+                      {onOpenSupabaseModal && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenSupabaseModal('resend')}
+                          className="text-[#0051d5] hover:underline font-bold text-[11px] shrink-0 cursor-pointer"
+                        >
+                          Ubah Domain / URL Supabase →
+                        </button>
+                      )}
+                    </div>
+
                     <div>
                       <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
                         Alamat Email Terdaftar
@@ -1052,6 +1116,55 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </button>
                     </div>
 
+                    {/* Alat Penyelamat Instan jika link email nyasar ke localhost */}
+                    <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200/90 text-xs space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowRecoveryPaste(!showRecoveryPaste)}
+                        className="w-full flex items-center justify-between font-bold text-gray-700 hover:text-[#0051d5] transition-colors cursor-pointer text-left"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[16px] text-[#0051d5]">vpn_key</span>
+                          <span>Tautan email Anda mengarah ke localhost? (Aktivasi Langsung)</span>
+                        </span>
+                        <span className="material-symbols-outlined text-[18px]">
+                          {showRecoveryPaste ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </button>
+
+                      {showRecoveryPaste && (
+                        <div className="pt-1.5 space-y-2 animate-in fade-in">
+                          <p className="text-[11px] text-gray-500 leading-relaxed">
+                            Jika link tombol di email Anda bertuliskan <code>http://localhost:3000/...</code>, salin seluruh tautan dari tombol email tersebut lalu tempel di sini untuk langsung membuat kata sandi baru:
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <input
+                              type="text"
+                              value={recoveryInputUrl}
+                              onChange={(e) => setRecoveryInputUrl(e.target.value)}
+                              placeholder="Tempel link email: http://localhost:3000/#access_token=..."
+                              className="flex-1 bg-white rounded-xl px-3 py-2 text-xs font-mono text-[#0e1c2f] border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                            />
+                            <button
+                              type="button"
+                              disabled={recoveryActivating || !recoveryInputUrl.trim()}
+                              onClick={handleActivateManualRecovery}
+                              className="bg-[#0051d5] hover:bg-[#316bf3] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1 shrink-0"
+                            >
+                              {recoveryActivating ? (
+                                <span>Mengaktifkan...</span>
+                              ) : (
+                                <>
+                                  <span className="material-symbols-outlined text-[15px]">verified</span>
+                                  <span>Aktivasi Token</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {onOpenSupabaseModal && (
                       <div className="pt-1 flex items-center justify-between text-[11px] text-gray-500">
                         <span>Pengiriman tanpa batas kuota via Resend</span>
@@ -1060,7 +1173,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           onClick={() => onOpenSupabaseModal('resend')}
                           className="text-[#0051d5] hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
                         >
-                          <span>Panduan Resend SMTP</span>
+                          <span>Panduan Resend &amp; Supabase</span>
                           <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
                         </button>
                       </div>

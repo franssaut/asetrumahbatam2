@@ -510,10 +510,138 @@ export async function signUpWithEmail(data: {
   return { success: true, user: newProfile };
 }
 
+export const DEFAULT_PRODUCTION_URL = 'https://asetrumahbatam2.vercel.app';
+
+/**
+ * Mendapatkan basis URL domain untuk redirect autentikasi Supabase.
+ * Menghindari masalah tautan email tersangkut di localhost saat dibuka di HP / perangkat luar.
+ */
+export function getAuthRedirectBaseUrl(): string {
+  // 1. Cek konfigurasi manual pengguna di localStorage (diatur via modal Supabase)
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('arb_site_url');
+      if (saved && saved.trim().startsWith('http')) {
+        return saved.trim().replace(/\/+$/, '');
+      }
+    } catch (e) {}
+  }
+
+  // 2. Cek environment variables (VITE_SITE_URL, VITE_APP_URL, APP_URL)
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const envUrl = (import.meta.env.VITE_SITE_URL as string) || 
+                   (import.meta.env.VITE_APP_URL as string);
+    if (envUrl && envUrl.trim().startsWith('http') && !envUrl.includes('MY_APP_URL')) {
+      return envUrl.trim().replace(/\/+$/, '');
+    }
+  }
+
+  // 3. Jika sedang diakses di browser pada domain live publik (bukan localhost/127.0.0.1)
+  if (typeof window !== 'undefined' && window.location.origin) {
+    const currentOrigin = window.location.origin;
+    if (!currentOrigin.includes('localhost') && !currentOrigin.includes('127.0.0.1')) {
+      return currentOrigin;
+    }
+  }
+
+  // 4. Default fallback: Gunakan domain production agar email dapat dibuka di HP atau perangkat lain
+  return DEFAULT_PRODUCTION_URL;
+}
+
+/**
+ * Menyimpan custom Site URL (misal: domain live atau IP LAN untuk testing)
+ */
+export function setCustomSiteUrl(url: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const clean = url.trim().replace(/\/+$/, '');
+    if (!clean) {
+      localStorage.removeItem('arb_site_url');
+    } else {
+      localStorage.setItem('arb_site_url', clean);
+    }
+    window.dispatchEvent(new CustomEvent('arb_site_url_changed', { detail: clean }));
+  } catch (e) {}
+}
+
+/**
+ * Mengaktifkan sesi pemulihan kata sandi secara instan dari URL/Token email.
+ * Sangat berguna jika tautan email terlanjur mengarah ke localhost dan disalin oleh pengguna.
+ */
+export async function activateRecoverySessionFromUrl(urlOrToken: string): Promise<{ success: boolean; message: string }> {
+  const clean = urlOrToken.trim();
+  if (!clean) {
+    return { success: false, message: 'Silakan masukkan tautan atau token dari email Anda.' };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { success: false, message: 'Supabase client belum aktif.' };
+  }
+
+  try {
+    let fragment = '';
+    if (clean.includes('#')) {
+      fragment = clean.split('#')[1];
+    } else if (clean.includes('?')) {
+      fragment = clean.split('?')[1];
+    } else {
+      fragment = clean;
+    }
+
+    const params = new URLSearchParams(fragment);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (accessToken && refreshToken) {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (error) {
+        return { success: false, message: `Token tidak valid atau telah kadaluarsa: ${error.message}` };
+      }
+
+      window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: data.session }));
+      return {
+        success: true,
+        message: 'Sesi pemulihan berhasil diaktifkan! Silakan masukkan kata sandi baru Anda.',
+      };
+    }
+
+    // Jika user menempel token OTP atau token hash hex
+    if (clean.length > 20 && !clean.includes(' ') && !clean.includes('/')) {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: clean,
+        type: 'recovery',
+      });
+
+      if (!error && data.session) {
+        window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: data.session }));
+        return {
+          success: true,
+          message: 'Token pemulihan valid! Silakan masukkan kata sandi baru Anda.',
+        };
+      }
+    }
+
+    return {
+      success: false,
+      message: 'Format URL tidak berisi access_token. Pastikan Anda menyalin seluruh alamat tautan dari tombol email pemulihan.',
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal memproses URL pemulihan.' };
+  }
+}
+
 /**
  * Send password reset email via Supabase Auth
  */
-export async function resetPasswordForEmail(email: string): Promise<{ success: boolean; message: string }> {
+export async function resetPasswordForEmail(
+  email: string,
+  targetRedirectBase?: string
+): Promise<{ success: boolean; message: string; targetUrl?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
     return {
@@ -540,9 +668,11 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
   }
 
   try {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://asetrumahbatam2.vercel.app';
+    const redirectBase = targetRedirectBase || getAuthRedirectBaseUrl();
+    const fullRedirectUrl = `${redirectBase}/login?tab=reset_password`;
+
     const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: `${origin}/login?tab=reset_password`,
+      redirectTo: fullRedirectUrl,
     });
 
     if (error) {
@@ -561,7 +691,8 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
 
     return {
       success: true,
-      message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail} (via ${deliveryProvider}). Silakan periksa kotak masuk atau spam email Anda.`,
+      message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail} (via ${deliveryProvider}). Tautan mengarahkan ke: ${redirectBase}`,
+      targetUrl: fullRedirectUrl,
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal mengirim email reset kata sandi.' };
@@ -579,12 +710,12 @@ export async function resendConfirmationEmail(email: string): Promise<{ success:
 
   const cleanEmail = email.trim().toLowerCase();
   try {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://asetrumahbatam2.vercel.app';
+    const redirectBase = getAuthRedirectBaseUrl();
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email: cleanEmail,
       options: {
-        emailRedirectTo: `${origin}`,
+        emailRedirectTo: `${redirectBase}`,
       },
     });
 

@@ -19,6 +19,11 @@ import {
   DEFAULT_RESEND_FROM_EMAIL,
   DEFAULT_RESEND_FROM_NAME,
 } from '../lib/resend';
+import {
+  getAuthRedirectBaseUrl,
+  setCustomSiteUrl,
+  DEFAULT_PRODUCTION_URL,
+} from '../lib/auth';
 
 export type SupabaseModalTab = 'config' | 'schema' | 'data' | 'resend';
 
@@ -53,6 +58,11 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
   const [copiedConfirmTemplate, setCopiedConfirmTemplate] = useState(false);
   const [copiedAllSmtp, setCopiedAllSmtp] = useState(false);
 
+  // Site & Redirect URLs State (Solusi error link email mengarah ke localhost)
+  const [siteRedirectUrl, setSiteRedirectUrl] = useState(() => getAuthRedirectBaseUrl());
+  const [copiedRedirectList, setCopiedRedirectList] = useState(false);
+  const [copiedSiteUrl, setCopiedSiteUrl] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       if (initialTab) {
@@ -68,6 +78,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
       setResendFromEmail(rCfg.fromEmail || DEFAULT_RESEND_FROM_EMAIL);
       setResendFromName(rCfg.fromName || DEFAULT_RESEND_FROM_NAME);
       setResendTestResult(null);
+      setSiteRedirectUrl(getAuthRedirectBaseUrl());
 
       try {
         const subs = JSON.parse(localStorage.getItem('arb_local_submissions') || '[]');
@@ -142,6 +153,20 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({
   const projectId = projectIdMatch ? projectIdMatch[1] : 'ngdhaamejiuoqpppkfkq';
   const supabaseSmtpSettingsUrl = `https://supabase.com/dashboard/project/${projectId}/settings/auth`;
   const supabaseEmailTemplatesUrl = `https://supabase.com/dashboard/project/${projectId}/auth/templates`;
+  const supabaseUrlConfigUrl = `https://supabase.com/dashboard/project/${projectId}/settings/auth`;
+
+  const effectiveSiteUrl = siteRedirectUrl.trim() || DEFAULT_PRODUCTION_URL;
+  const redirectUrlsList = `http://localhost:3000/**
+http://localhost:3000/login?tab=reset_password
+${effectiveSiteUrl}/**
+${effectiveSiteUrl}/login?tab=reset_password
+https://*.vercel.app/**`;
+
+  const copyAllRedirectUrls = () => {
+    navigator.clipboard.writeText(redirectUrlsList);
+    setCopiedRedirectList(true);
+    setTimeout(() => setCopiedRedirectList(false), 2500);
+  };
 
   const copyAllSmtpConfig = () => {
     const summary = `=== PENGATURAN SMTP RESEND UNTUK SUPABASE AUTH ===
@@ -490,6 +515,112 @@ Link Supabase Dashboard: ${supabaseSmtpSettingsUrl}`;
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+
+            {/* SOLUSI REDIRECT LOCALHOST / SUPABASE URL CONFIGURATION */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/70 border border-amber-200/90 text-amber-950 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-amber-700 text-[22px] shrink-0 mt-0.5">
+                  warning_amber
+                </span>
+                <div>
+                  <h4 className="font-bold text-sm text-amber-950">
+                    Solusi: Tautan Email Mengarah ke "localhost"
+                  </h4>
+                  <p className="text-xs text-amber-900/90 leading-relaxed mt-0.5">
+                    Jika email reset kata sandi mengarahkan ke <code>http://localhost:3000</code> dan tidak bisa dibuka di HP, hal ini terjadi karena <strong>Site URL &amp; Redirect URLs</strong> di Supabase Dashboard masih mengarah ke localhost.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white/95 rounded-xl p-3.5 border border-amber-200/80 space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-[#0e1c2f] uppercase tracking-wider block">
+                      Domain Website Live Anda (Site URL)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSiteRedirectUrl(DEFAULT_PRODUCTION_URL);
+                        setCustomSiteUrl(DEFAULT_PRODUCTION_URL);
+                        setCopiedField('reset_url_default');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="text-[10px] text-[#0051d5] hover:underline font-bold cursor-pointer"
+                    >
+                      {copiedField === 'reset_url_default' ? '✓ Disetel ke Default Vercel' : 'Gunakan Default Vercel'}
+                    </button>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="url"
+                      value={siteRedirectUrl}
+                      onChange={(e) => setSiteRedirectUrl(e.target.value)}
+                      placeholder="https://asetrumahbatam2.vercel.app"
+                      className="flex-1 bg-gray-50 rounded-lg px-3 py-2 text-xs font-mono text-[#0e1c2f] border border-gray-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomSiteUrl(siteRedirectUrl);
+                        setCopiedField('site_url_saved');
+                        setTimeout(() => setCopiedField(null), 2000);
+                      }}
+                      className="bg-[#0051d5] hover:bg-[#316bf3] text-white px-3.5 py-2 rounded-lg text-xs font-bold cursor-pointer transition-colors shrink-0"
+                    >
+                      {copiedField === 'site_url_saved' ? '✓ Tersimpan!' : 'Simpan Domain'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-[#0e1c2f]">Langkah Perbaikan di Supabase Dashboard:</span>
+                    <a
+                      href={supabaseUrlConfigUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0051d5] font-bold hover:underline inline-flex items-center gap-1 text-[11px]"
+                    >
+                      <span>Buka URL Configuration di Supabase</span>
+                      <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                    </a>
+                  </div>
+                  
+                  <div className="space-y-2 text-[11px] text-gray-700">
+                    <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-gray-400 block">1. Site URL (Ubah dari localhost)</span>
+                        <span className="font-mono font-bold text-[#0051d5]">{effectiveSiteUrl}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(effectiveSiteUrl, 'site_url')}
+                        className="bg-white border border-gray-300 px-2 py-1 rounded text-[10px] font-bold text-gray-700 hover:text-[#0051d5] cursor-pointer"
+                      >
+                        {copiedField === 'site_url' ? '✓ Tersalin' : 'Salin Site URL'}
+                      </button>
+                    </div>
+
+                    <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-gray-400">2. Redirect URLs (Masukkan allowlist)</span>
+                        <button
+                          type="button"
+                          onClick={copyAllRedirectUrls}
+                          className="bg-[#0e1c2f] hover:bg-[#0051d5] text-white px-2 py-1 rounded text-[10px] font-bold cursor-pointer"
+                        >
+                          {copiedRedirectList ? '✓ Semua Tersalin!' : 'Salin Daftar Redirect URLs'}
+                        </button>
+                      </div>
+                      <pre className="bg-gray-900 text-gray-200 p-2 rounded text-[10px] font-mono leading-relaxed overflow-x-auto">
+{redirectUrlsList}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
