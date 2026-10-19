@@ -826,59 +826,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Bantuan Otomatis Reset Sandi Langsung */}
-                  {forgotEmail.trim() && forgotEmail.includes('@') && (
-                    <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs space-y-2 animate-in fade-in">
-                      <div className="flex items-start gap-1.5">
-                        <span className="material-symbols-outlined text-indigo-600 text-[16px] shrink-0 mt-0.5">offline_bolt</span>
-                        <div>
-                          <p className="font-bold text-indigo-950">
-                            Opsi 1 (Instan Tanpa Email): Atur Sandi Baru Langsung
-                          </p>
-                          <p className="text-[10px] text-indigo-800 leading-relaxed">
-                            Bypass pengiriman email! Anda dapat <strong>langsung mengubah kata sandi akun ini secara instan</strong> di sini:
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-1 border-t border-indigo-100">
-                        <input
-                          type={showInstantLocalPassword ? 'text' : 'password'}
-                          placeholder="Sandi baru (min. 6 kar)"
-                          value={instantLocalPassword}
-                          onChange={(e) => setInstantLocalPassword(e.target.value)}
-                          className="flex-1 px-2.5 py-1.5 bg-white rounded-lg border border-indigo-200 text-xs text-[#0e1c2f] outline-none focus:ring-1 focus:ring-[#0051d5]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowInstantLocalPassword(!showInstantLocalPassword)}
-                          className="px-2 py-1 text-indigo-600 hover:text-indigo-800 text-[10px] font-bold bg-white rounded-lg border border-indigo-200 cursor-pointer"
-                        >
-                          {showInstantLocalPassword ? 'Tutup' : 'Lihat'}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!instantLocalPassword || instantLocalPassword.length < 6}
-                          onClick={() => {
-                            const resetRes = resetLocalUserPassword(forgotEmail, instantLocalPassword);
-                            if (resetRes.success) {
-                              setSuccessMsg(resetRes.message);
-                              setErrorMsg(null);
-                              setLoginEmail(forgotEmail);
-                              setLoginPassword(instantLocalPassword);
-                              setTimeout(() => setActiveTab('login'), 1200);
-                            } else {
-                              setErrorMsg(resetRes.message);
-                            }
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs shrink-0"
-                        >
-                          Simpan Sandi
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
                   <button
                     type="submit"
                     disabled={loading}
@@ -892,7 +839,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     ) : (
                       <>
                         <span className="material-symbols-outlined text-[18px]">send</span>
-                        <span>Kirim Tautan &amp; Kode OTP via Resend</span>
+                        <span>Kirim Tautan &amp; Kode OTP</span>
                       </>
                     )}
                   </button>

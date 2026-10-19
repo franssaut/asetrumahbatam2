@@ -1259,62 +1259,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </div>
                     </div>
 
-                    {/* Bantuan Otomatis Reset Sandi Langsung Tanpa Ketergantungan Email */}
-                    {forgotEmail.trim() && forgotEmail.includes('@') && (
-                      <div className="p-3.5 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-xs space-y-2.5 animate-in fade-in">
-                        <div className="flex items-start gap-2">
-                          <span className="material-symbols-outlined text-indigo-600 text-[18px] shrink-0 mt-0.5">offline_bolt</span>
-                          <div>
-                            <p className="font-bold text-indigo-950">
-                              Opsi 1 (Paling Cepat): Atur Kata Sandi Baru Langsung
-                            </p>
-                            <p className="text-[11px] text-indigo-800 leading-relaxed mt-0.5">
-                              Bypass pengiriman email! Anda dapat <strong>langsung mengubah kata sandi akun ini secara instan</strong> di sini tanpa perlu menunggu email masuk:
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 pt-1 border-t border-indigo-100">
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type={showInstantLocalPassword ? 'text' : 'password'}
-                              placeholder="Kata sandi baru (min. 6 karakter)"
-                              value={instantLocalPassword}
-                              onChange={(e) => setInstantLocalPassword(e.target.value)}
-                              className="flex-1 px-3 py-2 bg-white rounded-xl border border-indigo-200 text-xs text-[#0e1c2f] font-medium outline-none focus:ring-2 focus:ring-[#0051d5]"
-                            />
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setShowInstantLocalPassword(!showInstantLocalPassword)}
-                                className="px-2.5 py-2 text-indigo-600 hover:text-indigo-800 text-[11px] font-bold bg-white rounded-xl border border-indigo-200 cursor-pointer"
-                              >
-                                {showInstantLocalPassword ? 'Tutup' : 'Lihat'}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!instantLocalPassword || instantLocalPassword.length < 6}
-                                onClick={() => {
-                                  const resetRes = resetLocalUserPassword(forgotEmail, instantLocalPassword);
-                                  if (resetRes.success) {
-                                    setSuccessMsg(resetRes.message);
-                                    setErrorMsg(null);
-                                    setLoginEmail(forgotEmail);
-                                    setLoginPassword(instantLocalPassword);
-                                    setTimeout(() => handleSwitchTab('login'), 1200);
-                                  } else {
-                                    setErrorMsg(resetRes.message);
-                                  }
-                                }}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs shrink-0"
-                              >
-                                Simpan Sandi Baru
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
 
                     <div className="flex gap-2">
                       <button
