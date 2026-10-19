@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { UserProfile, PropertyItem, PageId } from '../types';
 import { 
   getFavoritePropertyIds, 
@@ -142,7 +142,12 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   const [quickSubPrice, setQuickSubPrice] = useState('1.500.000.000');
   const [quickSubLegal, setQuickSubLegal] = useState('Sertifikat HGB Murni (BPN)');
   const [quickSubIntent, setQuickSubIntent] = useState<'jual' | 'sewa'>('jual');
+  const [quickSubImages, setQuickSubImages] = useState<string[]>([]);
   const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
+
+  // File Input DOM Refs for reliable clicking across browsers
+  const listingFileInputRef = useRef<HTMLInputElement>(null);
+  const quickFileInputRef = useRef<HTMLInputElement>(null);
 
   // Quick Booking Form State
   const [quickBookAgent, setQuickBookAgent] = useState('hendry-tan');
@@ -482,45 +487,57 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     );
   };
 
-  // Helper: kompresi gambar client-side agar upload multi-gambar cepat & hemat memori
-  const compressImage = (file: File, maxDimension = 1400, quality = 0.82): Promise<string> => {
+  // Helper: kompresi gambar client-side dengan toleransi tinggi & tanpa bottleneck
+  const compressImage = (file: File, maxDimension = 1200, quality = 0.8): Promise<string> => {
     return new Promise((resolve) => {
-      if (file.type === 'image/svg+xml') {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve((e.target?.result as string) || '');
-        reader.onerror = () => resolve('');
-        reader.readAsDataURL(file);
-        return;
-      }
-
       const reader = new FileReader();
       reader.onload = (e) => {
+        const result = (e.target?.result as string) || '';
+        if (!result) {
+          resolve('');
+          return;
+        }
+
+        // Jika SVG, kembalikan langsung string data URL
+        if (file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg')) {
+          resolve(result);
+          return;
+        }
+
         const img = new Image();
         img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height * maxDimension) / width);
-              width = maxDimension;
-            } else {
-              width = Math.round((width * maxDimension) / height);
-              height = maxDimension;
+          try {
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDimension || height > maxDimension) {
+              if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+              } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+              }
             }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(result);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressed || result);
+          } catch {
+            resolve(result);
           }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve((e.target?.result as string) || '');
-            return;
-          }
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', quality));
         };
-        img.onerror = () => resolve((e.target?.result as string) || '');
-        img.src = (e.target?.result as string) || '';
+        img.onerror = () => {
+          // Jika image decode gagal di canvas (misal format khusus), tetap kirim raw data URL
+          resolve(result);
+        };
+        img.src = result;
       };
       reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
@@ -532,21 +549,33 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     if (!fileList || fileList.length === 0) return;
     setIsUploadingImages(true);
     try {
-      const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
+      // Izinkan file berdasarkan MIME type ATAU ekstensi file (agar kompatibel di Windows/HP)
+      const isImg = (f: File) =>
+        (f.type && f.type.startsWith('image/')) ||
+        /\.(jpe?g|png|webp|gif|bmp|svg|jfif|heic|heif|avif)$/i.test(f.name);
+
+      const files = Array.from(fileList).filter(isImg);
       if (files.length === 0) {
         setToastMessage({
           type: 'error',
-          text: 'Format file tidak didukung. Harap pilih berkas foto (JPG, PNG, atau WebP).',
+          text: 'Harap pilih berkas foto yang valid (JPG, PNG, atau WebP).',
         });
         return;
       }
+
       const compressedList = await Promise.all(files.map((f) => compressImage(f)));
       const validCompressed = compressedList.filter(Boolean);
+
       if (validCompressed.length > 0) {
         setFormImages((prev) => {
-          // Gabungkan dengan foto yang sudah ada (maksimal 12 foto)
+          // Jika sebelumnya hanya berisi foto preset contoh bawaan sistem, gantikan dengan foto asli pengguna
+          const isOnlyDefaultPreset = prev.length === 1 && prev[0] === PRESET_IMAGES[0].url;
+          if (isOnlyDefaultPreset) {
+            return validCompressed.slice(0, 12);
+          }
           return [...prev, ...validCompressed].slice(0, 12);
         });
+
         setToastMessage({
           type: 'success',
           text: `Berhasil menambahkan ${validCompressed.length} foto ke galeri listing!`,
@@ -560,6 +589,29 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       });
     } finally {
       setIsUploadingImages(false);
+    }
+  };
+
+  // Multi-upload handler khusus modal Titip Cepat
+  const handleQuickImageUpload = async (fileList: FileList | File[]) => {
+    const isImg = (f: File) =>
+      (f.type && f.type.startsWith('image/')) ||
+      /\.(jpe?g|png|webp|gif|bmp|svg|jfif|heic|heif|avif)$/i.test(f.name);
+
+    const files = Array.from(fileList).filter(isImg);
+    if (files.length === 0) return;
+    try {
+      const compressedList = await Promise.all(files.map((f) => compressImage(f)));
+      const valid = compressedList.filter(Boolean);
+      if (valid.length > 0) {
+        setQuickSubImages((prev) => [...prev, ...valid].slice(0, 8));
+        setToastMessage({
+          type: 'success',
+          text: `Berhasil melampirkan ${valid.length} foto pada pengajuan titip cepat!`,
+        });
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -761,7 +813,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
         legalStatus: quickSubLegal,
         uwtoDuration: 'Tahun 2050 (LMS BP Batam Valid)',
         intent: quickSubIntent,
-        notes: 'Diajukan langsung via Dashboard Pengguna ARB',
+        notes: `Diajukan langsung via Dashboard Pengguna ARB${quickSubImages.length > 0 ? ` (${quickSubImages.length} foto dilampirkan)` : ''}`,
       });
 
       if (res.success) {
@@ -781,6 +833,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
         setSubmissions([newRecord, ...submissions]);
         setShowQuickSubmitModal(false);
         setQuickSubAddress('');
+        setQuickSubImages([]);
       }
     } catch (err) {
       console.error(err);
@@ -2576,6 +2629,59 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 </select>
               </div>
 
+              {/* Unggah Foto Unit (Multi-Upload) */}
+              <div className="space-y-2 p-3 rounded-xl bg-gray-50 border border-gray-200/70">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-[#0e1c2f] flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[#0051d5] text-[16px]">photo_camera</span>
+                    Foto Properti ({quickSubImages.length} Foto)
+                  </label>
+                  <span className="text-[10px] text-gray-400">Opsional (Maks. 8)</span>
+                </div>
+
+                <input
+                  ref={quickFileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.jfif,.bmp"
+                  onChange={(e) => {
+                    const selected = Array.from(e.target.files || []);
+                    e.target.value = '';
+                    if (selected.length > 0) {
+                      handleQuickImageUpload(selected);
+                    }
+                  }}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => quickFileInputRef.current?.click()}
+                  className="w-full py-2 px-3 rounded-xl bg-white border border-dashed border-[#0051d5]/40 hover:border-[#0051d5] hover:bg-blue-50/50 text-[#0051d5] font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
+                  + Pilih Foto dari Perangkat (Bisa Banyak Sekaligus)
+                </button>
+
+                {quickSubImages.length > 0 && (
+                  <div className="grid grid-cols-4 gap-2 pt-1">
+                    {quickSubImages.map((imgUrl, idx) => (
+                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-200 border border-gray-300 group">
+                        <img src={imgUrl} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setQuickSubImages((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 hover:bg-rose-600 text-white flex items-center justify-center cursor-pointer shadow-xs"
+                          title="Hapus foto"
+                        >
+                          <span className="material-symbols-outlined text-[11px]">close</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -2903,7 +3009,8 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                     e.preventDefault();
                     setIsImageDragOver(false);
                     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                      handleMultipleImageUpload(e.dataTransfer.files);
+                      const dropped = Array.from(e.dataTransfer.files);
+                      handleMultipleImageUpload(dropped);
                     }
                   }}
                   className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
@@ -2913,14 +3020,16 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                   }`}
                 >
                   <input
+                    ref={listingFileInputRef}
                     id="multi-listing-images-input"
                     type="file"
                     multiple
-                    accept="image/*"
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.jfif,.bmp"
                     onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        handleMultipleImageUpload(e.target.files);
-                        e.target.value = '';
+                      const selected = Array.from(e.target.files || []);
+                      e.target.value = '';
+                      if (selected.length > 0) {
+                        handleMultipleImageUpload(selected);
                       }
                     }}
                     className="hidden"
@@ -2933,25 +3042,35 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                       <p className="text-[11px] text-gray-500">Menyesuaikan resolusi agar cepat dimuat di portal</p>
                     </div>
                   ) : (
-                    <label htmlFor="multi-listing-images-input" className="cursor-pointer block space-y-2">
-                      <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0051d5] mx-auto shadow-2xs group-hover:scale-110 transition-transform">
+                    <div className="space-y-2">
+                      <div 
+                        onClick={() => listingFileInputRef.current?.click()}
+                        className="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0051d5] mx-auto shadow-2xs cursor-pointer hover:scale-110 transition-transform"
+                      >
                         <span className="material-symbols-outlined text-[28px]">add_photo_alternate</span>
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-[#0e1c2f] hover:text-[#0051d5]">
+                        <p 
+                          onClick={() => listingFileInputRef.current?.click()}
+                          className="text-xs font-bold text-[#0e1c2f] hover:text-[#0051d5] cursor-pointer"
+                        >
                           Klik untuk Pilih Banyak Berkas Foto atau Seret & Lepas ke Sini
                         </p>
                         <p className="text-[11px] text-gray-500 mt-0.5">
-                          Dapat memilih lebih dari 1 file foto sekaligus (JPG, PNG, WebP). Kompresi otomatis & bebas kuota.
+                          Tahan tombol Ctrl / Shift untuk memilih banyak foto sekaligus (JPG, PNG, WebP).
                         </p>
                       </div>
                       <div className="pt-1">
-                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#0051d5] text-white text-xs font-bold shadow-xs hover:bg-[#316bf3] transition-colors">
-                          <span className="material-symbols-outlined text-[16px]">upload_file</span>
-                          + Pilih Banyak Foto dari Perangkat
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => listingFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0051d5] text-white text-xs font-bold shadow-xs hover:bg-[#316bf3] active:scale-95 transition-all cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                          Pilih Banyak Foto dari Komputer / HP
+                        </button>
                       </div>
-                    </label>
+                    </div>
                   )}
                 </div>
 

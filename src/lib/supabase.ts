@@ -327,9 +327,23 @@ export function saveLocalCustomProperty(property: PropertyItem): void {
     } else {
       existing.unshift(property);
     }
-    localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(existing));
+    
+    try {
+      localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(existing.slice(0, 30)));
+    } catch (quotaErr) {
+      console.warn('LocalStorage quota warning, trimming stored properties:', quotaErr);
+      try {
+        localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(existing.slice(0, 10)));
+      } catch {
+        const compact = existing.slice(0, 5).map((p) => ({
+          ...p,
+          additionalImages: (p.additionalImages || []).slice(0, 3),
+        }));
+        localStorage.setItem(CUSTOM_PROPERTIES_KEY, JSON.stringify(compact));
+      }
+    }
   } catch (e) {
-    console.error(e);
+    console.error('Error saving local custom property:', e);
   }
 }
 

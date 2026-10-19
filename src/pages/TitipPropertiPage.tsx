@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { BRAND_ASSETS } from '../data/mockData';
 import { submitPropertyListing } from '../lib/supabase';
 import { getStoredUser } from '../lib/auth';
@@ -19,6 +19,7 @@ export const TitipPropertiPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string }[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const titipFileInputRef = useRef<HTMLInputElement>(null);
 
   const propertyTypes = [
     { id: 'Perumahan Residensial', label: 'Perumahan Residensial', icon: 'home' },
@@ -40,33 +41,79 @@ export const TitipPropertiPage: React.FC = () => {
     setPrice(formatted);
   };
 
-  const processFiles = (files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
-    imageFiles.forEach((file) => {
+  const compressImage = (file: File, maxDimension = 1200, quality = 0.8): Promise<string> => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        if (e.target?.result) {
-          setUploadedFiles((prev) => {
-            if (prev.length >= 8) return prev;
-            return [...prev, { name: file.name, url: e.target?.result as string }];
-          });
-        }
+        const result = (e.target?.result as string) || '';
+        if (!result) return resolve('');
+        if (file.type === 'image/svg+xml') return resolve(result);
+
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDimension || height > maxDimension) {
+              if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+              } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return resolve(result);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality) || result);
+          } catch {
+            resolve(result);
+          }
+        };
+        img.onerror = () => resolve(result);
+        img.src = result;
       };
+      reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
     });
+  };
+
+  const processFiles = async (files: FileList | File[]) => {
+    const isImg = (f: File) =>
+      (f.type && f.type.startsWith('image/')) ||
+      /\.(jpe?g|png|webp|gif|bmp|svg|jfif|heic|heif|avif)$/i.test(f.name);
+
+    const imageFiles = Array.from(files).filter(isImg);
+    if (imageFiles.length === 0) return;
+
+    for (const file of imageFiles) {
+      const dataUrl = await compressImage(file);
+      if (dataUrl) {
+        setUploadedFiles((prev) => {
+          if (prev.length >= 8) return prev;
+          return [...prev, { name: file.name, url: dataUrl }];
+        });
+      }
+    }
   };
 
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+      const dropped = Array.from(e.dataTransfer.files);
+      processFiles(dropped);
     }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
-      e.target.value = '';
+    const selected = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (selected.length > 0) {
+      processFiles(selected);
     }
   };
 
@@ -438,27 +485,42 @@ export const TitipPropertiPage: React.FC = () => {
                 <div
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={handleFileDrop}
+                  onClick={() => titipFileInputRef.current?.click()}
                   className="bg-[#eff4ff] border-2 border-dashed border-[#c5c6cd] hover:border-[#0051d5] rounded-2xl p-6 text-center cursor-pointer transition-colors"
                 >
                   <input
+                    ref={titipFileInputRef}
                     type="file"
                     id="property-file-input"
                     multiple
-                    accept="image/*"
+                    accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.jfif,.bmp"
                     onChange={handleFileInput}
                     className="hidden"
                   />
-                  <label htmlFor="property-file-input" className="cursor-pointer block">
-                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#0051d5] mx-auto shadow-xs mb-2">
+                  <div className="cursor-pointer block space-y-2">
+                    <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#0051d5] mx-auto shadow-xs mb-1">
                       <span className="material-symbols-outlined text-[26px]">add_photo_alternate</span>
                     </div>
                     <div className="text-[14px] font-bold text-[#0b1c30]">
                       Klik untuk pilih berkas foto atau seret ke area ini
                     </div>
-                    <p className="text-[12px] text-[#44474c] mt-0.5">
-                      Format JPG, PNG, atau HEIC (Maksimal 10 foto, maks. 10MB per foto)
+                    <p className="text-[12px] text-[#44474c]">
+                      Dapat memilih banyak foto sekaligus (Tahan tombol Ctrl / Shift). Format JPG, PNG, atau WebP.
                     </p>
-                  </label>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          titipFileInputRef.current?.click();
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0051d5] text-white text-xs font-bold shadow-xs hover:bg-[#316bf3] active:scale-95 transition-all cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                        Pilih Banyak Foto dari Perangkat
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Uploaded File Previews */}
                   {uploadedFiles.length > 0 && (
