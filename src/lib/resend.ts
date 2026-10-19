@@ -293,10 +293,23 @@ export const SUPABASE_RESET_PASSWORD_TEMPLATE_HTML = `<!DOCTYPE html>
           </a>
         </div>
 
+        <!-- 6-DIGIT OTP CODE BOX (Solusi instan jika link diarahkan ke localhost) -->
+        <div style="margin: 28px auto; padding: 20px; background-color: #f0f7ff; border: 2px dashed #0051d5; border-radius: 14px; text-align: center; max-width: 360px;">
+          <div style="font-size: 11px; font-weight: 700; color: #0051d5; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">
+            Atau Masukkan 6-Digit Kode Verifikasi (OTP):
+          </div>
+          <div style="font-size: 32px; font-weight: 900; font-family: 'SF Pro Mono', Consolas, Monaco, monospace; letter-spacing: 8px; color: #0e1c2f; padding: 4px 0;">
+            {{ .Token }}
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.4;">
+            Masukkan kode angka ini langsung pada formulir pemulihan di web tanpa perlu mengklik tautan di atas.
+          </div>
+        </div>
+
         <div class="notice-box">
           <strong>⚠️ Catatan Keamanan:</strong>
           <br>
-          • Tautan ini aman dan berlaku selama <strong>60 menit</strong>.
+          • Tautan &amp; Kode OTP ini aman dan berlaku selama <strong>60 menit</strong>.
           <br>
           • Jika Anda tidak merasa mengajukan permintaan ini, abaikan email ini. Akun Anda tetap terlindungi dan kata sandi Anda tidak akan berubah.
         </div>

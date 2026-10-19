@@ -119,6 +119,20 @@ export function parseInitialRoute(properties: PropertyItem[] = PROPERTIES_LIST):
   const searchParams = new URLSearchParams(window.location.search);
   const hash = window.location.hash.toLowerCase();
 
+  // PRIORITY CHECK: Password recovery tokens, PKCE codes, error, or reset tabs in URL
+  // If Supabase redirects after recovery token verification (even to root '/'), route to login/reset immediately
+  if (
+    hash.includes('type=recovery') ||
+    (hash.includes('access_token=') && (hash.includes('recovery') || hash.includes('type='))) ||
+    hash.includes('error=') ||
+    searchParams.has('code') ||
+    searchParams.get('tab') === 'reset_password' ||
+    searchParams.get('tab') === 'reset' ||
+    searchParams.get('tab') === 'forgot'
+  ) {
+    return { page: 'login' };
+  }
+
   // 1. Check for properti path pattern: /properti/:id or /detail-properti/:id
   const propertiPathMatch = pathname.match(/^\/(?:properti|detail-properti)\/([^/]+)/);
   let targetPropertyId: string | null = propertiPathMatch ? decodeURIComponent(propertiPathMatch[1]) : null;

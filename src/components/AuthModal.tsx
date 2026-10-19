@@ -8,7 +8,8 @@ import {
   resendConfirmationEmail,
   checkEmailExists,
   getAuthRedirectBaseUrl,
-  activateRecoverySessionFromUrl
+  activateRecoverySessionFromUrl,
+  verifyOtpAndResetPassword
 } from '../lib/auth';
 import { getSupabaseConfig } from '../lib/supabase';
 import { BRAND_ASSETS } from '../data/mockData';
@@ -54,6 +55,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [showRecoveryPaste, setShowRecoveryPaste] = useState(false);
   const [recoveryInputUrl, setRecoveryInputUrl] = useState('');
   const [recoveryActivating, setRecoveryActivating] = useState(false);
+
+  // Direct OTP verification state (Bebas masalah redirect/localhost)
+  const [otpCode, setOtpCode] = useState('');
+  const [otpNewPassword, setOtpNewPassword] = useState('');
+  const [otpConfirmPassword, setOtpConfirmPassword] = useState('');
+  const [showOtpNewPassword, setShowOtpNewPassword] = useState(false);
+  const [showOtpConfirmPassword, setShowOtpConfirmPassword] = useState(false);
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [showDirectOtpMode, setShowDirectOtpMode] = useState(false);
 
   const supabaseConfig = getSupabaseConfig();
   const isSupabaseActive = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
@@ -255,6 +265,54 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMsg(err.message || 'Gagal mengaktifkan sesi pemulihan.');
     } finally {
       setRecoveryActivating(false);
+    }
+  };
+
+  const handleVerifyOtpAndReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const cleanEmail = forgotEmail.trim().toLowerCase();
+    const cleanOtp = otpCode.trim();
+
+    if (!cleanEmail) {
+      setErrorMsg('Mohon masukkan alamat email akun Anda.');
+      return;
+    }
+    if (!cleanOtp) {
+      setErrorMsg('Mohon masukkan 6-digit kode OTP atau token dari email Anda.');
+      return;
+    }
+    if (!otpNewPassword || otpNewPassword.length < 6) {
+      setErrorMsg('Kata sandi baru minimal 6 karakter.');
+      return;
+    }
+    if (otpNewPassword !== otpConfirmPassword) {
+      setErrorMsg('Konfirmasi kata sandi baru tidak cocok. Mohon periksa kembali.');
+      return;
+    }
+
+    setOtpSubmitting(true);
+    try {
+      const res = await verifyOtpAndResetPassword(cleanEmail, cleanOtp, otpNewPassword);
+      if (res.success) {
+        setSuccessMsg(res.message);
+        setLoginEmail(cleanEmail);
+        setLoginPassword('');
+        setOtpCode('');
+        setOtpNewPassword('');
+        setOtpConfirmPassword('');
+        setTimeout(() => {
+          setActiveTab('login');
+        }, 1500);
+      } else {
+        setErrorMsg(res.message);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal memverifikasi kode OTP.');
+    } finally {
+      setOtpSubmitting(false);
     }
   };
 
@@ -647,7 +705,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {/* TAB 3: FORGOT PASSWORD */}
           {activeTab === 'forgot' && (
             <div className="space-y-4">
-              {!forgotSent ? (
+              {!forgotSent && !showDirectOtpMode ? (
                 <form onSubmit={handleForgotSubmit} className="space-y-4">
                   <div className="text-left">
                     <button
@@ -669,7 +727,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Masukkan email terdaftar Anda. Supabase Auth didukung infrastruktur <strong>Resend</strong> akan mengirimkan tautan aman untuk mengatur ulang kata sandi Anda.
+                      Masukkan email terdaftar Anda. Supabase Auth didukung infrastruktur <strong>Resend</strong> akan mengirimkan tautan aman dan <strong>6-digit kode OTP</strong> untuk mengatur ulang kata sandi Anda.
                     </p>
                   </div>
 
@@ -724,10 +782,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     ) : (
                       <>
                         <span className="material-symbols-outlined text-[18px]">send</span>
-                        <span>Kirim Tautan Reset via Resend</span>
+                        <span>Kirim Tautan &amp; Kode OTP via Resend</span>
                       </>
                     )}
                   </button>
+
+                  {/* Tombol switch jika sudah punya kode OTP */}
+                  <div className="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-[11px] flex items-center justify-between">
+                    <span className="text-indigo-900 font-medium">Sudah menerima 6-digit kode OTP di email?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDirectOtpMode(true);
+                        setErrorMsg(null);
+                        setSuccessMsg(null);
+                      }}
+                      className="text-[#0051d5] font-bold hover:underline cursor-pointer"
+                    >
+                      Masukkan Kode →
+                    </button>
+                  </div>
 
                   {/* Alat Aktivasi Instan jika link nyasar ke localhost */}
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs space-y-2">
@@ -738,7 +812,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     >
                       <span className="flex items-center gap-1">
                         <span className="material-symbols-outlined text-[15px] text-[#0051d5]">vpn_key</span>
-                        <span>Tautan email mengarah ke localhost? (Aktivasi Langsung)</span>
+                        <span>Tautan email mengarah ke localhost? (Aktivasi Manual)</span>
                       </span>
                       <span className="material-symbols-outlined text-[16px]">
                         {showRecoveryPaste ? 'expand_less' : 'expand_more'}
@@ -770,44 +844,136 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </div>
                     )}
                   </div>
-
-                  {onOpenSupabaseModal && (
-                    <div className="pt-1 flex items-center justify-between text-[11px] text-gray-500">
-                      <span>Pengiriman bebas kuota via Resend</span>
-                      <button
-                        type="button"
-                        onClick={() => onOpenSupabaseModal('resend')}
-                        className="text-[#0051d5] hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <span>Panduan Resend &amp; Supabase</span>
-                        <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
-                      </button>
-                    </div>
-                  )}
                 </form>
               ) : (
                 <div className="space-y-4 animate-in fade-in">
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className="material-symbols-outlined text-emerald-600 text-[22px]">mark_email_read</span>
-                      <p className="font-bold text-sm text-emerald-950">Tautan Pemulihan Terkirim!</p>
+                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-emerald-600 text-[20px]">mark_email_read</span>
+                      <p className="font-bold text-sm text-emerald-950">Tautan &amp; Kode Pemulihan Terkirim!</p>
                     </div>
-                    <p className="leading-relaxed text-emerald-800">
-                      Tautan aman pemulihan sandi telah dikirim ke: <strong className="text-emerald-950">{forgotEmail}</strong> melalui infrastruktur Resend SMTP.
-                      Silakan periksa kotak masuk utama atau spam email Anda.
+                    <p className="leading-relaxed text-emerald-800 text-[11px]">
+                      Masukkan <strong>6-digit kode OTP dari email</strong> di formulir bawah ini untuk langsung membuat kata sandi baru akun Anda:
                     </p>
-                    <div className="text-[11px] text-emerald-700 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span>Terkirim {resendCount > 1 ? `(${resendCount} kali)` : '1 kali'}</span>
-                    </div>
                   </div>
 
+                  {/* FORM LANGSUNG: VERIFIKASI 6-DIGIT KODE OTP & GANTI KATA SANDI */}
+                  <form onSubmit={handleVerifyOtpAndReset} className="p-4 rounded-2xl bg-white border-2 border-[#0051d5] space-y-3 shadow-md">
+                    <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+                      <h4 className="font-bold text-xs text-[#0e1c2f] flex items-center gap-1.5">
+                        <span className="w-5 h-5 rounded-full bg-[#0051d5] text-white flex items-center justify-center text-[10px]">1</span>
+                        <span>Verifikasi Kode OTP 6-Digit</span>
+                      </h4>
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
+                        Bebas Redirect
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#0e1c2f] mb-1">
+                        Alamat Email Akun
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        placeholder="nama@email.com"
+                        className="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs outline-none focus:border-[#0051d5]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#0e1c2f] mb-1">
+                        6-Digit Kode OTP dari Email
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                        placeholder="contoh: 482910"
+                        className="w-full px-3 py-2 rounded-xl border-2 border-blue-400 bg-blue-50/40 text-[#0e1c2f] font-mono text-base font-black tracking-widest outline-none focus:border-[#0051d5] focus:bg-white transition-all placeholder:text-gray-400 placeholder:font-normal placeholder:tracking-normal placeholder:text-xs"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#0e1c2f] mb-1">
+                          Kata Sandi Baru (Min 6)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showOtpNewPassword ? 'text' : 'password'}
+                            required
+                            value={otpNewPassword}
+                            onChange={(e) => setOtpNewPassword(e.target.value)}
+                            placeholder="Min 6 karakter"
+                            className="w-full pl-3 pr-8 py-2 rounded-xl border border-gray-300 text-xs outline-none focus:border-[#0051d5]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowOtpNewPassword(!showOtpNewPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">
+                              {showOtpNewPassword ? 'visibility_off' : 'visibility'}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#0e1c2f] mb-1">
+                          Ulangi Kata Sandi Baru
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showOtpConfirmPassword ? 'text' : 'password'}
+                            required
+                            value={otpConfirmPassword}
+                            onChange={(e) => setOtpConfirmPassword(e.target.value)}
+                            placeholder="Ulangi sandi"
+                            className="w-full pl-3 pr-8 py-2 rounded-xl border border-gray-300 text-xs outline-none focus:border-[#0051d5]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowOtpConfirmPassword(!showOtpConfirmPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">
+                              {showOtpConfirmPassword ? 'visibility_off' : 'visibility'}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={otpSubmitting}
+                      className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      {otpSubmitting ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Menyimpan Sandi...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                          <span>Verifikasi Kode &amp; Simpan Sandi Baru</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+
                   {/* Resend Panel dengan Timer */}
-                  <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-xs space-y-2.5">
+                  <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 text-xs space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-700">Belum menerima email pemulihan?</span>
+                      <span className="font-semibold text-gray-700 text-[11px]">Belum menerima email?</span>
                       {resendCountdown > 0 && (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[11px]">
+                        <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[10px]">
                           {resendCountdown}s
                         </span>
                       )}
@@ -818,13 +984,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         type="button"
                         disabled={resending || resendCountdown > 0}
                         onClick={handleResendForgot}
-                        className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                        className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                           resendCountdown > 0 || resending
                             ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                             : 'bg-[#0051d5] hover:bg-[#316bf3] text-white active:scale-95'
                         }`}
                       >
-                        <span className={`material-symbols-outlined text-[16px] ${resending ? 'animate-spin' : ''}`}>
+                        <span className={`material-symbols-outlined text-[15px] ${resending ? 'animate-spin' : ''}`}>
                           {resending ? 'progress_activity' : 'forward_to_inbox'}
                         </span>
                         <span>
@@ -840,11 +1006,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         type="button"
                         onClick={() => {
                           setForgotSent(false);
+                          setShowDirectOtpMode(false);
                           setErrorMsg(null);
                         }}
-                        className="py-2.5 px-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-white text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        className="py-2 px-3 rounded-xl border border-gray-200 text-gray-700 hover:bg-white text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[15px]">edit</span>
+                        <span className="material-symbols-outlined text-[14px]">edit</span>
                         <span>Ganti Email</span>
                       </button>
                     </div>

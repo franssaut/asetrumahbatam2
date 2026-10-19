@@ -46,13 +46,20 @@ export default function App() {
       setCurrentUser(user);
     };
 
+    const handlePasswordRecovery = () => {
+      setCurrentPage('login');
+      document.title = 'Setel Kata Sandi Baru | Aset Rumah Batam';
+    };
+
     window.addEventListener('arb_auth_changed', handleAuthChange);
+    window.addEventListener('arb_password_recovery', handlePasswordRecovery);
     const unsubscribeSupabase = initSupabaseAuth((user) => {
       setCurrentUser(user);
     });
 
     return () => {
       window.removeEventListener('arb_auth_changed', handleAuthChange);
+      window.removeEventListener('arb_password_recovery', handlePasswordRecovery);
       unsubscribeSupabase();
     };
   }, []);

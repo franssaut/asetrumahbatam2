@@ -92,6 +92,19 @@ export function initSupabaseAuth(onUserChange?: (user: UserProfile | null) => vo
     return () => {};
   }
 
+  // 0. PKCE code exchange if query param ?code= is present (Supabase Auth PKCE flow)
+  if (typeof window !== 'undefined') {
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get('code');
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        if (!error && data?.session) {
+          window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: data.session }));
+        }
+      }).catch((e) => console.warn('Supabase exchangeCode error:', e));
+    }
+  }
+
   // 1. Check existing live session
   supabase.auth.getSession().then(async ({ data: { session }, error }) => {
     if (error) {
@@ -141,9 +154,11 @@ export function initSupabaseAuth(onUserChange?: (user: UserProfile | null) => vo
         setStoredUser(profile);
         if (onUserChange) onUserChange(profile);
 
-        // Clean up URL hash after processing OAuth or email confirmation token
+        // Clean up URL hash after processing OAuth or recovery token, preserving recovery query param
         if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
-          window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+          const isRecovery = window.location.hash.includes('type=recovery') || event === 'PASSWORD_RECOVERY';
+          const targetSearch = isRecovery ? '?tab=reset_password' : window.location.search;
+          window.history.replaceState({}, document.title, window.location.pathname + targetSearch);
         }
       }
     } else if (event === 'SIGNED_OUT') {
@@ -590,6 +605,24 @@ export async function activateRecoverySessionFromUrl(urlOrToken: string): Promis
     }
 
     const params = new URLSearchParams(fragment);
+
+    // 1. Cek parameter PKCE code (?code=...)
+    const code = params.get('code');
+    if (code) {
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        return { success: false, message: `Kode verifikasi tidak valid atau kadaluarsa: ${error.message}` };
+      }
+      if (data?.session) {
+        window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: data.session }));
+        return {
+          success: true,
+          message: 'Sesi pemulihan berhasil diaktifkan! Silakan masukkan kata sandi baru Anda.',
+        };
+      }
+    }
+
+    // 2. Cek token implisit (access_token & refresh_token)
     const accessToken = params.get('access_token');
     const refreshToken = params.get('refresh_token');
 
@@ -610,14 +643,15 @@ export async function activateRecoverySessionFromUrl(urlOrToken: string): Promis
       };
     }
 
-    // Jika user menempel token OTP atau token hash hex
-    if (clean.length > 20 && !clean.includes(' ') && !clean.includes('/')) {
+    // 3. Cek token_hash dalam parameter URL
+    const tokenHash = params.get('token_hash') || params.get('token');
+    if (tokenHash && tokenHash.length > 20) {
       const { data, error } = await supabase.auth.verifyOtp({
-        token_hash: clean,
+        token_hash: tokenHash,
         type: 'recovery',
       });
 
-      if (!error && data.session) {
+      if (!error && data?.session) {
         window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: data.session }));
         return {
           success: true,
@@ -626,12 +660,143 @@ export async function activateRecoverySessionFromUrl(urlOrToken: string): Promis
       }
     }
 
+    // 4. Jika user menempel token hex hash murni langsung
+    if (clean.length > 20 && !clean.includes(' ') && !clean.includes('/')) {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: clean,
+        type: 'recovery',
+      });
+
+      if (!error && data?.session) {
+        window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: data.session }));
+        return {
+          success: true,
+          message: 'Token pemulihan valid! Silakan masukkan kata sandi baru Anda.',
+        };
+      }
+    }
+
+    // 5. Jika user memasukkan 6-digit angka OTP
+    if (/^\d{6,8}$/.test(clean)) {
+      return {
+        success: false,
+        message: 'Kode yang Anda masukkan adalah kode angka OTP. Masukkan di kolom "Kode OTP dari Email" di atas untuk langsung memperbarui kata sandi.',
+      };
+    }
+
     return {
       success: false,
-      message: 'Format URL tidak berisi access_token. Pastikan Anda menyalin seluruh alamat tautan dari tombol email pemulihan.',
+      message: 'Format tautan tidak dikenali. Pastikan Anda menyalin seluruh alamat tautan dari tombol di email Anda, atau gunakan 6-digit kode OTP langsung.',
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal memproses URL pemulihan.' };
+  }
+}
+
+/**
+ * Verifikasi 6-Digit OTP / Token Pemulihan dan simpan kata sandi baru secara instan.
+ * Bekerja 100% mandiri tanpa ketergantungan pada redirect URL, localhost, atau domain Vercel.
+ */
+export async function verifyOtpAndResetPassword(
+  email: string,
+  token: string,
+  newPassword?: string
+): Promise<{ success: boolean; message: string; session?: any }> {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanToken = token.trim();
+
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    return { success: false, message: 'Alamat email wajib diisi dengan benar.' };
+  }
+  if (!cleanToken) {
+    return { success: false, message: 'Kode OTP 6-digit atau token dari email wajib diisi.' };
+  }
+  if (newPassword && newPassword.length < 6) {
+    return { success: false, message: 'Kata sandi baru minimal 6 karakter.' };
+  }
+
+  // Jika akun demo
+  const isDemo = Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail);
+  if (isDemo) {
+    return {
+      success: true,
+      message: 'Akun demo terverifikasi! Anda dapat langsung masuk ke sistem.',
+    };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { success: false, message: 'Supabase client belum aktif.' };
+  }
+
+  try {
+    // 1. Verifikasi OTP via Supabase Auth (type: 'recovery')
+    let verifyRes = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'recovery',
+    });
+
+    // Jika gagal dan token panjang (token_hash), coba opsi token_hash
+    if (verifyRes.error && cleanToken.length > 20) {
+      verifyRes = await supabase.auth.verifyOtp({
+        token_hash: cleanToken,
+        type: 'recovery',
+      });
+    }
+
+    if (verifyRes.error) {
+      let errMsg = verifyRes.error.message;
+      if (errMsg.toLowerCase().includes('expired')) {
+        errMsg = 'Kode OTP atau token telah kadaluarsa. Silakan klik "Kirim Ulang Tautan".';
+      } else if (errMsg.toLowerCase().includes('invalid')) {
+        errMsg = 'Kode OTP tidak sesuai. Pastikan Anda memasukkan 6-digit angka dari email pemulihan terbaru.';
+      }
+      return { success: false, message: errMsg };
+    }
+
+    if (!verifyRes.data?.session) {
+      return { success: false, message: 'Verifikasi kode berhasil, namun sesi pemulihan belum terbentuk.' };
+    }
+
+    // Trigger recovery session event
+    window.dispatchEvent(new CustomEvent('arb_password_recovery', { detail: verifyRes.data.session }));
+
+    // 2. Jika newPassword diberikan langsung, simpan kata sandi baru sekarang juga!
+    if (newPassword) {
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) {
+        return {
+          success: false,
+          message: `Kode valid, namun gagal menyimpan sandi baru: ${updateError.message}`,
+        };
+      }
+
+      // Update registry akun lokal jika ada
+      try {
+        const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+          JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+        const idx = registeredUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
+        if (idx >= 0) {
+          registeredUsers[idx].password = newPassword;
+          localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
+        }
+      } catch (e) {}
+
+      return {
+        success: true,
+        message: 'Kata sandi baru berhasil disimpan! Silakan masuk dengan kata sandi baru Anda.',
+        session: verifyRes.data.session,
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Kode OTP terverifikasi! Silakan masukkan kata sandi baru Anda.',
+      session: verifyRes.data.session,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal memverifikasi kode OTP pemulihan.' };
   }
 }
 
