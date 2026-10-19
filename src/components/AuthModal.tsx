@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { signInWithEmail, signUpWithEmail, demoLogin } from '../lib/auth';
+import { 
+  signInWithEmail, 
+  signUpWithEmail, 
+  demoLogin, 
+  resetPasswordForEmail, 
+  signInWithOAuth 
+} from '../lib/auth';
+import { getSupabaseConfig } from '../lib/supabase';
 import { BRAND_ASSETS } from '../data/mockData';
 
 interface AuthModalProps {
@@ -16,7 +23,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSuccess,
   initialTab = 'login',
 }) => {
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>(initialTab);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -32,6 +39,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regRole, setRegRole] = useState<UserProfile['role']>('klien');
+
+  // Forgot password form state
+  const [forgotEmail, setForgotEmail] = useState('');
+
+  const supabaseConfig = getSupabaseConfig();
+  const isSupabaseActive = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
 
   if (!isOpen) return null;
 
@@ -90,17 +103,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       });
 
       if (res.success && res.user) {
-        setSuccessMsg(`Pendaftaran berhasil! Selamat datang, ${res.user.fullName}.`);
+        setSuccessMsg(res.message || `Pendaftaran berhasil di Supabase! Selamat datang, ${res.user.fullName}.`);
         setTimeout(() => {
           onSuccess(res.user!);
           onClose();
-        }, 800);
+        }, 900);
       } else {
         setErrorMsg(res.message || 'Gagal mendaftar. Silakan coba kembali.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan pendaftaran.');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!forgotEmail) {
+      setErrorMsg('Mohon masukkan email yang terdaftar.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await resetPasswordForEmail(forgotEmail);
+      if (res.success) {
+        setSuccessMsg(res.message);
+      } else {
+        setErrorMsg(res.message);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal memproses pemulihan kata sandi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setErrorMsg(null);
+    setLoading(true);
+    const res = await signInWithOAuth('google');
+    if (!res.success) {
+      setErrorMsg(res.message || 'Gagal menghubungkan Google OAuth.');
       setLoading(false);
     }
   };
@@ -131,7 +179,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
 
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md mb-3 ring-1 ring-white/20">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md mb-2 ring-1 ring-white/20">
             <img
               src={BRAND_ASSETS.logoUrl}
               alt="Logo"
@@ -142,12 +190,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
             Portal Akun Aset Rumah Batam
           </h2>
-          <p className="text-white/80 text-xs sm:text-sm mt-1 max-w-xs mx-auto">
-            Akses listing eksklusif, kelola titip properti, dan pantau status legalitas UWTO
-          </p>
+          <div className="flex items-center justify-center gap-1.5 mt-1">
+            <span className={`w-2 h-2 rounded-full ${isSupabaseActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+            <span className="text-[11px] text-white/90 font-medium">
+              {isSupabaseActive ? 'Terintegrasi Supabase Cloud Auth' : 'Mode Offline'}
+            </span>
+          </div>
 
           {/* Tab Selector */}
-          <div className="mt-5 grid grid-cols-2 p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/15">
+          <div className="mt-4 grid grid-cols-2 p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/15">
             <button
               type="button"
               onClick={() => {
@@ -182,7 +233,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+        <div className="p-6 overflow-y-auto space-y-4 flex-1">
           {/* Status Notifications */}
           {errorMsg && (
             <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-start gap-2 animate-in fade-in">
@@ -227,8 +278,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   </label>
                   <button
                     type="button"
-                    onClick={() => alert('Fitur reset kata sandi dikirim via email Supabase terdaftar.')}
-                    className="text-xs text-[#0051d5] hover:underline font-medium"
+                    onClick={() => {
+                      setActiveTab('forgot');
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-xs text-[#0051d5] hover:underline font-medium cursor-pointer"
                   >
                     Lupa sandi?
                   </button>
@@ -265,19 +320,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {loading ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    <span>Memverifikasi...</span>
+                    <span>Memverifikasi Supabase Auth...</span>
                   </>
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[18px]">login</span>
-                    <span>Masuk ke Akun</span>
+                    <span>Masuk ke Akun Supabase</span>
                   </>
                 )}
               </button>
 
+              {/* Google OAuth Login */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="w-full py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-semibold text-xs transition-all flex items-center justify-center gap-2.5 shadow-2xs cursor-pointer"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span>Masuk dengan Google (Supabase OAuth)</span>
+              </button>
+
               {/* 1-Click Demo Login Shortcuts */}
               <div className="pt-3 border-t border-gray-100">
-                <div className="flex items-center gap-2 mb-2.5">
+                <div className="flex items-center gap-2 mb-2">
                   <span className="material-symbols-outlined text-amber-500 text-[18px]">bolt</span>
                   <p className="text-xs font-bold text-[#0e1c2f]">
                     Uji Coba Cepat 1-Klik (Akun Demo):
@@ -364,7 +434,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5 uppercase tracking-wider">
-                  Email Aktif *
+                  Email Aktif (Supabase Auth) *
                 </label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
@@ -473,10 +543,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div className="text-[11px] text-gray-500 leading-relaxed">
-                Dengan mendaftar, Anda menyetujui Ketentuan Layanan, Kebijakan Privasi, dan verifikasi akun Aset Rumah Batam.
-              </div>
-
               <button
                 type="submit"
                 disabled={loading}
@@ -485,12 +551,73 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {loading ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    <span>Mendaftarkan Akun...</span>
+                    <span>Mendaftarkan ke Supabase...</span>
                   </>
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[18px]">person_add</span>
-                    <span>Buat Akun Sekarang</span>
+                    <span>Daftarkan Akun ke Supabase</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* TAB 3: FORGOT PASSWORD */}
+          {activeTab === 'forgot' && (
+            <form onSubmit={handleForgotSubmit} className="space-y-4">
+              <div className="text-left">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('login');
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-[#0051d5] font-semibold hover:underline cursor-pointer mb-2"
+                >
+                  <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+                  Kembali ke Masuk Akun
+                </button>
+                <h3 className="font-bold text-base text-[#0e1c2f]">Pemulihan Kata Sandi</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Masukkan email terdaftar Anda. Supabase Auth akan mengirimkan tautan aman untuk mengatur ulang kata sandi Anda.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5 uppercase tracking-wider">
+                  Email Akun Supabase
+                </label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                    mail
+                  </span>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="nama@email.com"
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50/50 text-[#0e1c2f] text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5] focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 px-4 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold text-sm shadow-[0_4px_16px_rgba(0,81,213,0.25)] transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>Mengirim Tautan...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    <span>Kirim Tautan Reset via Supabase</span>
                   </>
                 )}
               </button>

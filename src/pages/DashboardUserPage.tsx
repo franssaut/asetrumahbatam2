@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, PropertyItem, PageId } from '../types';
-import { getFavoritePropertyIds, toggleFavoriteProperty, signOutUser, demoLogin } from '../lib/auth';
+import { 
+  getFavoritePropertyIds, 
+  toggleFavoriteProperty, 
+  signOutUser, 
+  demoLogin, 
+  updateUserProfile, 
+  updateUserPassword 
+} from '../lib/auth';
+import { getSupabase } from '../lib/supabase';
 import { getPropertyPath } from '../lib/navigation';
 
 interface DashboardUserPageProps {
@@ -14,6 +22,7 @@ interface DashboardUserPageProps {
 
 interface LocalSubmission {
   id?: string;
+  user_id?: string;
   property_type?: string;
   region?: string;
   address?: string;
@@ -26,6 +35,7 @@ interface LocalSubmission {
 
 interface LocalBooking {
   id?: string;
+  user_id?: string;
   client_name?: string;
   whatsapp_number?: string;
   agent_id?: string;
@@ -47,18 +57,64 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   const [submissions, setSubmissions] = useState<LocalSubmission[]>([]);
   const [bookings, setBookings] = useState<LocalBooking[]>([]);
 
-  // Load user data on mount
+  // Profile Edit States
+  const [editFullName, setEditFullName] = useState(user.fullName);
+  const [editPhone, setEditPhone] = useState(user.phone || '');
+  const [editRole, setEditRole] = useState<UserProfile['role']>(user.role);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Password Change States
+  const [newPassword, setNewPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Sync state when user prop changes
+  useEffect(() => {
+    setEditFullName(user.fullName);
+    setEditPhone(user.phone || '');
+    setEditRole(user.role);
+  }, [user]);
+
+  // Load user data on mount & query Supabase
   useEffect(() => {
     // 1. Favorites
     setFavoriteIds(getFavoritePropertyIds());
 
-    // 2. Submissions
-    try {
-      const storedSubmissions = JSON.parse(localStorage.getItem('arb_local_submissions') || '[]');
-      if (storedSubmissions.length > 0) {
-        setSubmissions(storedSubmissions);
+    // 2. Submissions (Local + Supabase)
+    const loadSubmissions = async () => {
+      let localList: LocalSubmission[] = [];
+      try {
+        localList = JSON.parse(localStorage.getItem('arb_local_submissions') || '[]');
+      } catch (e) {}
+
+      const client = getSupabase();
+      if (client) {
+        try {
+          const { data: dbSubmissions } = await client
+            .from('property_submissions')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (dbSubmissions && dbSubmissions.length > 0) {
+            const userDbSubs = dbSubmissions.filter((s: any) =>
+              s.user_id === user.id ||
+              (user.phone && s.owner_whatsapp === user.phone) ||
+              (s.owner_name && s.owner_name.toLowerCase().includes(user.fullName.toLowerCase()))
+            );
+            if (userDbSubs.length > 0) {
+              setSubmissions(userDbSubs);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('Supabase submissions query notice:', err);
+        }
+      }
+
+      if (localList.length > 0) {
+        setSubmissions(localList);
       } else {
-        // Sample submission for demo feeling
         setSubmissions([
           {
             id: 'sub-sample-01',
@@ -73,17 +129,42 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
           },
         ]);
       }
-    } catch (e) {
-      console.error(e);
-    }
+    };
 
-    // 3. Bookings
-    try {
-      const storedBookings = JSON.parse(localStorage.getItem('arb_local_bookings') || '[]');
-      if (storedBookings.length > 0) {
-        setBookings(storedBookings);
+    // 3. Bookings (Local + Supabase)
+    const loadBookings = async () => {
+      let localList: LocalBooking[] = [];
+      try {
+        localList = JSON.parse(localStorage.getItem('arb_local_bookings') || '[]');
+      } catch (e) {}
+
+      const client = getSupabase();
+      if (client) {
+        try {
+          const { data: dbBookings } = await client
+            .from('consultation_bookings')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+          if (dbBookings && dbBookings.length > 0) {
+            const userDbBookings = dbBookings.filter((b: any) =>
+              b.user_id === user.id ||
+              (user.phone && b.whatsapp_number === user.phone) ||
+              (b.client_name && b.client_name.toLowerCase().includes(user.fullName.toLowerCase()))
+            );
+            if (userDbBookings.length > 0) {
+              setBookings(userDbBookings);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('Supabase bookings query notice:', err);
+        }
+      }
+
+      if (localList.length > 0) {
+        setBookings(localList);
       } else {
-        // Sample booking
         setBookings([
           {
             id: 'book-sample-01',
@@ -96,9 +177,10 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
           },
         ]);
       }
-    } catch (e) {
-      console.error(e);
-    }
+    };
+
+    loadSubmissions();
+    loadBookings();
   }, [user]);
 
   // Favorite properties list
@@ -511,32 +593,186 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
 
         {/* TAB 4: PROFILE & DEMO SWITCHER */}
         {activeTab === 'profile' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff]">
-              <h3 className="text-base font-bold text-[#0e1c2f] mb-4">Informasi Akun Anda</h3>
-              <div className="space-y-3 text-xs sm:text-sm">
-                <div>
-                  <span className="text-gray-400 block text-xs">Nama Lengkap</span>
-                  <p className="font-semibold text-[#0e1c2f] mt-0.5">{user.fullName}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Supabase Profile Edit Form */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff] space-y-5">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[22px]">manage_accounts</span>
+                  <h3 className="text-base font-bold text-[#0e1c2f]">Kelola Profil & Supabase Auth</h3>
                 </div>
-                <div>
-                  <span className="text-gray-400 block text-xs">Email Terdaftar</span>
-                  <p className="font-semibold text-[#0e1c2f] mt-0.5">{user.email}</p>
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  Supabase Live
+                </span>
+              </div>
+
+              {profileMsg && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    profileMsg.type === 'success'
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                      : 'bg-red-50 border border-red-200 text-red-700'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {profileMsg.type === 'success' ? 'check_circle' : 'error'}
+                  </span>
+                  <span>{profileMsg.text}</span>
                 </div>
+              )}
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setSavingProfile(true);
+                  setProfileMsg(null);
+                  try {
+                    const res = await updateUserProfile({
+                      fullName: editFullName,
+                      phone: editPhone,
+                      role: editRole,
+                    });
+                    if (res.success && res.user) {
+                      onUpdateUser(res.user);
+                      setProfileMsg({ type: 'success', text: 'Profil berhasil diperbarui di Supabase database!' });
+                    } else {
+                      setProfileMsg({ type: 'error', text: res.message || 'Gagal menyimpan profil.' });
+                    }
+                  } catch (err: any) {
+                    setProfileMsg({ type: 'error', text: err.message || 'Terjadi kesalahan sistem.' });
+                  } finally {
+                    setSavingProfile(false);
+                  }
+                }}
+                className="space-y-4"
+              >
                 <div>
-                  <span className="text-gray-400 block text-xs">Nomor WhatsApp</span>
-                  <p className="font-semibold text-[#0e1c2f] mt-0.5">{user.phone || 'Belum diatur'}</p>
+                  <label className="block text-xs font-bold text-[#0e1c2f] mb-1">Email Terdaftar (Supabase Auth)</label>
+                  <input
+                    type="email"
+                    value={user.email}
+                    disabled
+                    className="w-full px-3.5 py-2 rounded-xl bg-gray-100 border border-gray-200 text-gray-500 text-xs font-mono cursor-not-allowed"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1">Email terikat ke akun Supabase Auth Anda.</p>
                 </div>
+
                 <div>
-                  <span className="text-gray-400 block text-xs">Peran Akun</span>
-                  <p className="font-semibold text-[#0051d5] capitalize mt-0.5">{user.role}</p>
+                  <label className="block text-xs font-bold text-[#0e1c2f] mb-1">Nama Lengkap</label>
+                  <input
+                    type="text"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                  />
                 </div>
+
                 <div>
-                  <span className="text-gray-400 block text-xs">Waktu Pendaftaran</span>
-                  <p className="font-semibold text-gray-700 mt-0.5">
-                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString('id-ID', { dateStyle: 'full' }) : 'Terverifikasi'}
-                  </p>
+                  <label className="block text-xs font-bold text-[#0e1c2f] mb-1">Nomor WhatsApp Aktif</label>
+                  <input
+                    type="tel"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="0812-xxxx-xxxx"
+                    className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                  />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-[#0e1c2f] mb-1">Peran Akun</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserProfile['role'])}
+                    className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                  >
+                    <option value="klien">👤 Klien (Pembeli / Penjual Properti)</option>
+                    <option value="agen">👔 Agen (Konsultan Properti Resmi)</option>
+                    <option value="investor">💼 Investor (Pemodal Real Estat)</option>
+                    <option value="admin">🛡️ Administrator (Akses Penuh Portal)</option>
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold text-xs shadow-sm transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingProfile ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      <span>Menyimpan ke Supabase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[16px]">save</span>
+                      <span>Simpan Perubahan ke Supabase</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Password Change Form */}
+              <div className="pt-4 border-t border-gray-100">
+                <h4 className="text-xs font-bold text-[#0e1c2f] uppercase tracking-wider mb-2">Ganti Kata Sandi Akun</h4>
+                
+                {passwordMsg && (
+                  <div
+                    className={`p-3 mb-3 rounded-xl text-xs flex items-center gap-2 ${
+                      passwordMsg.type === 'success'
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                        : 'bg-red-50 border border-red-200 text-red-700'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      {passwordMsg.type === 'success' ? 'check_circle' : 'error'}
+                    </span>
+                    <span>{passwordMsg.text}</span>
+                  </div>
+                )}
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (newPassword.length < 6) {
+                      setPasswordMsg({ type: 'error', text: 'Kata sandi minimal 6 karakter.' });
+                      return;
+                    }
+                    setSavingPassword(true);
+                    setPasswordMsg(null);
+                    try {
+                      const res = await updateUserPassword(newPassword);
+                      if (res.success) {
+                        setPasswordMsg({ type: 'success', text: res.message });
+                        setNewPassword('');
+                      } else {
+                        setPasswordMsg({ type: 'error', text: res.message });
+                      }
+                    } catch (err: any) {
+                      setPasswordMsg({ type: 'error', text: err.message || 'Gagal mengubah kata sandi.' });
+                    } finally {
+                      setSavingPassword(false);
+                    }
+                  }}
+                  className="space-y-3"
+                >
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Kata sandi baru (min. 6 karakter)"
+                    required
+                    className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingPassword}
+                    className="w-full py-2 px-4 rounded-xl bg-gray-900 hover:bg-[#0051d5] text-white font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {savingPassword ? 'Memperbarui...' : 'Perbarui Kata Sandi di Supabase'}
+                  </button>
+                </form>
               </div>
             </div>
 

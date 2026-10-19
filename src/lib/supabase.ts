@@ -108,9 +108,11 @@ export async function submitPropertyListing(data: {
   uwtoDuration: string;
   notes?: string;
   intent: 'jual' | 'sewa';
+  userId?: string;
 }) {
   const client = getSupabase();
   const submissionRecord = {
+    user_id: data.userId || null,
     owner_name: data.ownerName,
     owner_whatsapp: data.ownerWhatsapp,
     property_type: data.propertyType,
@@ -161,9 +163,11 @@ export async function submitConsultationBooking(data: {
   agentId: string;
   timeSlot: string;
   interests: string;
+  userId?: string;
 }) {
   const client = getSupabase();
   const bookingRecord = {
+    user_id: data.userId || null,
     client_name: data.name,
     whatsapp_number: data.phone,
     agent_id: data.agentId,
@@ -330,10 +334,49 @@ export async function fetchProperties(): Promise<PropertyItem[]> {
 export const SUPABASE_SQL_SCHEMA = `-- Schema database Aset Rumah Batam untuk Supabase
 -- Buka Supabase Dashboard > SQL Editor > New query, lalu paste & jalankan script ini:
 
+-- 0. Tabel Profil Pengguna (Terintegrasi Supabase Auth)
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    email TEXT UNIQUE NOT NULL,
+    full_name TEXT,
+    phone TEXT,
+    role TEXT DEFAULT 'klien' CHECK (role IN ('klien', 'agen', 'investor', 'admin')),
+    avatar_url TEXT
+);
+
+-- Trigger Otomatis saat pengguna mendaftar di auth.users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, phone, role, avatar_url)
+  VALUES (
+    new.id,
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    new.raw_user_meta_data->>'phone',
+    COALESCE(new.raw_user_meta_data->>'role', 'klien'),
+    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://ui-avatars.com/api/?name=' || COALESCE(new.raw_user_meta_data->>'full_name', new.email) || '&background=0051d5&color=fff')
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    full_name = EXCLUDED.full_name,
+    phone = EXCLUDED.phone,
+    role = EXCLUDED.role,
+    updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
 -- 1. Tabel Pengajuan Titip Properti (Jual & Sewa)
 CREATE TABLE IF NOT EXISTS public.property_submissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     owner_name TEXT NOT NULL,
     owner_whatsapp TEXT NOT NULL,
     property_type TEXT NOT NULL,
@@ -352,6 +395,7 @@ CREATE TABLE IF NOT EXISTS public.property_submissions (
 CREATE TABLE IF NOT EXISTS public.consultation_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     client_name TEXT NOT NULL,
     whatsapp_number TEXT NOT NULL,
     agent_id TEXT NOT NULL,
@@ -366,17 +410,27 @@ CREATE TABLE IF NOT EXISTS public.newsletter_subscribers (
     email TEXT UNIQUE NOT NULL
 );
 
--- RLS (Row Level Security) - Ijinkan public insert untuk formulir website
+-- RLS (Row Level Security)
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.property_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.consultation_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 
+-- Policies
+CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+
 CREATE POLICY "Enable public insert for submissions" ON public.property_submissions
-    FOR INSERT TO anon WITH CHECK (true);
+    FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Enable select for submissions" ON public.property_submissions
+    FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY "Enable public insert for bookings" ON public.consultation_bookings
-    FOR INSERT TO anon WITH CHECK (true);
+    FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Enable select for bookings" ON public.consultation_bookings
+    FOR SELECT TO anon, authenticated USING (true);
 
 CREATE POLICY "Enable public insert for subscribers" ON public.newsletter_subscribers
-    FOR INSERT TO anon WITH CHECK (true);
+    FOR INSERT TO anon, authenticated WITH CHECK (true);
 `;

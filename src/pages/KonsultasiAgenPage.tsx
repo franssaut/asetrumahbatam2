@@ -3,17 +3,19 @@ import { AgentItem, PropertyItem } from '../types';
 import { AGENTS_LIST, BRAND_ASSETS } from '../data/mockData';
 import { AgentPortfolioModal } from '../components/AgentPortfolioModal';
 import { submitConsultationBooking } from '../lib/supabase';
+import { getStoredUser } from '../lib/auth';
 
 interface KonsultasiAgenPageProps {
   onSelectProperty: (property: PropertyItem) => void;
 }
 
 export const KonsultasiAgenPage: React.FC<KonsultasiAgenPageProps> = ({ onSelectProperty }) => {
+  const currentUser = getStoredUser();
   const [selectedAgentForPortfolio, setSelectedAgentForPortfolio] = useState<AgentItem | null>(null);
   const [scheduleSuccess, setScheduleSuccess] = useState(false);
   const [scheduleForm, setScheduleForm] = useState({
-    name: '',
-    phone: '',
+    name: currentUser?.fullName || '',
+    phone: currentUser?.phone ? currentUser.phone.replace(/\D/g, '') : '',
     agentId: 'hendry-tan',
     date: '',
     timeSlot: 'Pagi (09:00 - 12:00)',
@@ -26,6 +28,7 @@ export const KonsultasiAgenPage: React.FC<KonsultasiAgenPageProps> = ({ onSelect
 
     // Save booking request to Supabase
     await submitConsultationBooking({
+      userId: currentUser?.id,
       name: scheduleForm.name,
       phone: scheduleForm.phone,
       agentId: scheduleForm.agentId,

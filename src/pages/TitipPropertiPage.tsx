@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { BRAND_ASSETS } from '../data/mockData';
 import { submitPropertyListing } from '../lib/supabase';
+import { getStoredUser } from '../lib/auth';
 
 export const TitipPropertiPage: React.FC = () => {
+  const currentUser = getStoredUser();
   const [intent, setIntent] = useState<'jual' | 'sewa'>('jual');
-  const [propertyType, setPropertyType] = useState<string>('Rumah Mewah');
-  const [ownerName, setOwnerName] = useState('');
-  const [ownerWa, setOwnerWa] = useState('');
+  const [propertyType, setPropertyType] = useState<string>('Perumahan Residensial');
+  const [ownerName, setOwnerName] = useState(currentUser?.fullName || '');
+  const [ownerWa, setOwnerWa] = useState(currentUser?.phone ? currentUser.phone.replace(/\D/g, '') : '');
   const [region, setRegion] = useState('');
   const [address, setAddress] = useState('');
   const [price, setPrice] = useState('');
@@ -62,6 +64,7 @@ export const TitipPropertiPage: React.FC = () => {
 
     // Save to Supabase (with automatic offline fallback)
     await submitPropertyListing({
+      userId: currentUser?.id,
       ownerName,
       ownerWhatsapp: ownerWa,
       propertyType,

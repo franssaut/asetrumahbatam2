@@ -6,7 +6,7 @@ import { Footer } from './components/Footer';
 import { SupabaseModal } from './components/SupabaseModal';
 import { AuthModal } from './components/AuthModal';
 import { fetchProperties } from './lib/supabase';
-import { getStoredUser, signOutUser, demoLogin } from './lib/auth';
+import { getStoredUser, signOutUser, demoLogin, initSupabaseAuth } from './lib/auth';
 import { 
   parseInitialRoute, 
   getPropertyPath, 
@@ -32,7 +32,7 @@ export default function App() {
   const [loadingProperties, setLoadingProperties] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
 
-  // Listen to auth changes
+  // Listen to Supabase auth events & local changes
   useEffect(() => {
     const handleAuthChange = (e: any) => {
       const user = e.detail !== undefined ? e.detail : getStoredUser();
@@ -40,8 +40,13 @@ export default function App() {
     };
 
     window.addEventListener('arb_auth_changed', handleAuthChange);
+    const unsubscribeSupabase = initSupabaseAuth((user) => {
+      setCurrentUser(user);
+    });
+
     return () => {
       window.removeEventListener('arb_auth_changed', handleAuthChange);
+      unsubscribeSupabase();
     };
   }, []);
 
