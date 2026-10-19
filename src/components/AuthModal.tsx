@@ -5,6 +5,7 @@ import {
   signUpWithEmail, 
   demoLogin, 
   resetPasswordForEmail, 
+  resendConfirmationEmail,
   signInWithOAuth 
 } from '../lib/auth';
 import { getSupabaseConfig } from '../lib/supabase';
@@ -16,6 +17,7 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: (user: UserProfile) => void;
   initialTab?: 'login' | 'register';
+  onOpenSupabaseModal?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -23,6 +25,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
   initialTab = 'login',
+  onOpenSupabaseModal,
 }) => {
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot'>(initialTab);
   const [loading, setLoading] = useState(false);
@@ -30,6 +33,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [resending, setResending] = useState(false);
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -49,6 +53,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const isSupabaseActive = Boolean(supabaseConfig.url && supabaseConfig.anonKey);
 
   if (!isOpen) return null;
+
+  const handleResendConfirmation = async () => {
+    const targetEmail = loginEmail || regEmail;
+    if (!targetEmail) {
+      setErrorMsg('Mohon masukkan email Anda terlebih dahulu.');
+      return;
+    }
+    setResending(true);
+    setErrorMsg(null);
+    try {
+      const res = await resendConfirmationEmail(targetEmail);
+      if (res.success) {
+        setSuccessMsg(res.message);
+      } else {
+        setErrorMsg(res.message);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Gagal mengirim ulang email konfirmasi.');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,11 +213,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
             Portal Akun Aset Rumah Batam
           </h2>
-          <div className="flex items-center justify-center gap-1.5 mt-1">
+          <div className="flex items-center justify-center gap-2 mt-1">
             <span className={`w-2 h-2 rounded-full ${isSupabaseActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
             <span className="text-[11px] text-white/90 font-medium">
-              {isSupabaseActive ? 'Terintegrasi Supabase Cloud Auth' : 'Mode Offline'}
+              {isSupabaseActive ? 'Supabase Auth Cloud Terhubung' : 'Mode Offline'}
             </span>
+            {onOpenSupabaseModal && (
+              <button
+                type="button"
+                onClick={onOpenSupabaseModal}
+                className="text-[10px] bg-white/15 hover:bg-white/25 text-white font-bold px-2 py-0.5 rounded-full transition-colors cursor-pointer flex items-center gap-1 border border-white/20"
+                title="Buka status koneksi & script SQL Supabase"
+              >
+                <span>Status & SQL</span>
+                <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+              </button>
+            )}
           </div>
 
           {/* Tab Selector */}
@@ -233,9 +270,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-4 flex-1">
           {/* Status Notifications */}
           {errorMsg && (
-            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-start gap-2 animate-in fade-in">
+            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-start gap-2.5 animate-in fade-in">
               <span className="material-symbols-outlined text-red-500 text-[18px] shrink-0 mt-0.5">error</span>
-              <span>{errorMsg}</span>
+              <div className="flex-1 min-w-0">
+                <p>{errorMsg}</p>
+                {(errorMsg.includes('dikonfirmasi') || errorMsg.includes('not confirmed')) && (
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={resending}
+                    className="mt-2 text-xs font-bold text-[#0051d5] hover:underline flex items-center gap-1 cursor-pointer bg-white px-2.5 py-1 rounded-lg border border-red-200 shadow-xs"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">send</span>
+                    <span>{resending ? 'Mengirim...' : 'Kirim Ulang Tautan Konfirmasi Email'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

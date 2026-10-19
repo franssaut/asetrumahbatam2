@@ -49,7 +49,14 @@ export function getSupabase(): SupabaseClient | null {
   }
 
   try {
-    supabaseInstance = createClient(url, anonKey);
+    supabaseInstance = createClient(url, anonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+    });
     return supabaseInstance;
   } catch (err) {
     console.warn('Failed to initialize Supabase client:', err);
@@ -60,7 +67,7 @@ export function getSupabase(): SupabaseClient | null {
 /**
  * Test Supabase connectivity
  */
-export async function testSupabaseConnection(config?: SupabaseConfig): Promise<{ success: boolean; message: string }> {
+export async function testSupabaseConnection(config?: SupabaseConfig): Promise<{ success: boolean; message: string; authConnected?: boolean }> {
   const targetUrl = cleanSupabaseUrl(config?.url || getSupabaseConfig().url);
   const targetKey = (config?.anonKey || getSupabaseConfig().anonKey).trim();
 
@@ -73,20 +80,30 @@ export async function testSupabaseConnection(config?: SupabaseConfig): Promise<{
 
   try {
     const tempClient = createClient(targetUrl, targetKey);
-    const { error } = await tempClient.from('property_submissions').select('id').limit(1);
-
-    if (error && error.code !== 'PGRST116') {
-      // Table might not exist yet, but authentication is valid
-      if (error.message.includes('relation "property_submissions" does not exist')) {
-        return {
-          success: true,
-          message: 'Terkoneksi ke Supabase! (Tabel belum dibuat, jalankan script SQL yang tersedia)',
-        };
-      }
-      return { success: false, message: error.message };
+    // 1. Test Supabase Auth service
+    const { error: authError } = await tempClient.auth.getSession();
+    if (authError) {
+      return { success: false, message: `Gagal mengakses Supabase Auth: ${authError.message}` };
     }
 
-    return { success: true, message: 'Koneksi ke Supabase berhasil terhubung secara real-time!' };
+    // 2. Test database connection
+    const { error: dbError } = await tempClient.from('properties').select('id').limit(1);
+    if (dbError) {
+      if (dbError.message.includes('relation "properties" does not exist') || dbError.message.includes('schema cache')) {
+        return {
+          success: true,
+          authConnected: true,
+          message: 'Supabase Auth & Database Cloud terhubung! (Jalankan script SQL di tab Script SQL untuk melengkapi tabel database)',
+        };
+      }
+      return { success: false, message: `Koneksi database error: ${dbError.message}` };
+    }
+
+    return {
+      success: true,
+      authConnected: true,
+      message: 'Supabase Auth dan Database PostgreSQL berhasil terhubung aktif secara real-time!',
+    };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal menghubungi server Supabase' };
   }
@@ -482,21 +499,24 @@ export async function fetchProperties(): Promise<PropertyItem[]> {
 /**
  * SQL Schema for Supabase Setup
  */
-export const SUPABASE_SQL_SCHEMA = `-- Schema database Aset Rumah Batam untuk Supabase
--- Buka Supabase Dashboard > SQL Editor > New query, lalu paste & jalankan script ini:
+export const SUPABASE_SQL_SCHEMA = `-- ====================================================================
+-- SCHEMA DATABASE LENGKAP ASET RUMAH BATAM (SUPABASE POSTGRESQL)
+-- Buka Supabase Dashboard > SQL Editor > New query, lalu paste & jalankan (RUN):
+-- ====================================================================
 
--- 0. Tabel Profil Pengguna (Terintegrasi Supabase Auth)
+-- 1. TABEL PROFIL PENGGUNA (Terintegrasi Penuh Supabase Auth)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     phone TEXT,
     role TEXT DEFAULT 'agent' CHECK (role IN ('agent', 'admin')),
-    avatar_url TEXT
+    avatar_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- Trigger Otomatis saat pengguna mendaftar di auth.users
+-- Trigger otomatis saat user baru mendaftar di auth.users (Email atau Google OAuth)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -504,15 +524,15 @@ BEGIN
   VALUES (
     new.id,
     new.email,
-    COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    new.raw_user_meta_data->>'phone',
+    COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
+    COALESCE(new.raw_user_meta_data->>'phone', ''),
     COALESCE(new.raw_user_meta_data->>'role', 'agent'),
-    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://ui-avatars.com/api/?name=' || COALESCE(new.raw_user_meta_data->>'full_name', new.email) || '&background=0051d5&color=fff')
+    COALESCE(new.raw_user_meta_data->>'avatar_url', new.raw_user_meta_data->>'picture', 'https://ui-avatars.com/api/?name=' || COALESCE(new.raw_user_meta_data->>'full_name', new.email) || '&background=0051d5&color=fff')
   )
   ON CONFLICT (id) DO UPDATE SET
     full_name = EXCLUDED.full_name,
-    phone = EXCLUDED.phone,
-    role = EXCLUDED.role,
+    phone = COALESCE(EXCLUDED.phone, public.profiles.phone),
+    avatar_url = COALESCE(EXCLUDED.avatar_url, public.profiles.avatar_url),
     updated_at = now();
   RETURN NEW;
 END;
@@ -523,7 +543,40 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 1. Tabel Pengajuan Titip Properti (Jual & Sewa)
+-- 2. TABEL LISTING PROPERTI REAL ESTATE
+CREATE TABLE IF NOT EXISTS public.properties (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    type TEXT,
+    category TEXT NOT NULL,
+    location TEXT NOT NULL,
+    district TEXT NOT NULL,
+    price NUMERIC NOT NULL,
+    intent TEXT NOT NULL DEFAULT 'jual',
+    period TEXT,
+    area NUMERIC,
+    land_area NUMERIC NOT NULL,
+    building_area NUMERIC,
+    bedrooms INTEGER DEFAULT 0,
+    bathrooms INTEGER DEFAULT 0,
+    uwto_expiry_year INTEGER NOT NULL,
+    uwto_status TEXT,
+    legal_status TEXT,
+    image_url TEXT NOT NULL,
+    additional_images TEXT[] DEFAULT '{}',
+    featured BOOLEAN DEFAULT false,
+    agent_name TEXT,
+    agent_phone TEXT,
+    agent_role TEXT,
+    description TEXT,
+    facilities TEXT[] DEFAULT '{}',
+    status TEXT DEFAULT 'published' CHECK (status IN ('published', 'draft', 'sold', 'pending')),
+    owner_id TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 3. TABEL PENGAJUAN TITIP PROPERTI (Jual & Sewa)
 CREATE TABLE IF NOT EXISTS public.property_submissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -542,7 +595,7 @@ CREATE TABLE IF NOT EXISTS public.property_submissions (
     intent TEXT DEFAULT 'jual' NOT NULL
 );
 
--- 2. Tabel Penjadwalan Temu & Survei Konsultan
+-- 4. TABEL PENJADWALAN KONSULTASI & SURVEI
 CREATE TABLE IF NOT EXISTS public.consultation_bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -554,34 +607,53 @@ CREATE TABLE IF NOT EXISTS public.consultation_bookings (
     property_interests TEXT
 );
 
--- 3. Tabel Pelanggan Buletin & Wawasan Properti
+-- 5. TABEL PELANGGAN BULETIN & WAWASAN PROPERTI
 CREATE TABLE IF NOT EXISTS public.newsletter_subscribers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     email TEXT UNIQUE NOT NULL
 );
 
--- RLS (Row Level Security)
+-- AKTIFKAN ROW LEVEL SECURITY (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.property_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.consultation_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 
--- Policies
+-- KEBIJAKAN KEAMANAN (POLICIES)
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Enable public insert for submissions" ON public.property_submissions
-    FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Enable select for submissions" ON public.property_submissions
-    FOR SELECT TO anon, authenticated USING (true);
+DROP POLICY IF EXISTS "Properties are viewable by everyone" ON public.properties;
+CREATE POLICY "Properties are viewable by everyone" ON public.properties FOR SELECT USING (true);
 
-CREATE POLICY "Enable public insert for bookings" ON public.consultation_bookings
-    FOR INSERT TO anon, authenticated WITH CHECK (true);
-CREATE POLICY "Enable select for bookings" ON public.consultation_bookings
-    FOR SELECT TO anon, authenticated USING (true);
+DROP POLICY IF EXISTS "Allow modify properties" ON public.properties;
+CREATE POLICY "Allow modify properties" ON public.properties FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Enable public insert for subscribers" ON public.newsletter_subscribers
-    FOR INSERT TO anon, authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "Enable public insert for submissions" ON public.property_submissions;
+CREATE POLICY "Enable public insert for submissions" ON public.property_submissions FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Enable select for submissions" ON public.property_submissions;
+CREATE POLICY "Enable select for submissions" ON public.property_submissions FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Enable public insert for bookings" ON public.consultation_bookings;
+CREATE POLICY "Enable public insert for bookings" ON public.consultation_bookings FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Enable select for bookings" ON public.consultation_bookings;
+CREATE POLICY "Enable select for bookings" ON public.consultation_bookings FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "Enable public insert for subscribers" ON public.newsletter_subscribers;
+CREATE POLICY "Enable public insert for subscribers" ON public.newsletter_subscribers FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+-- BERIKAN HAK AKSES PERMISSION KE ANON & AUTHENTICATED
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 `;

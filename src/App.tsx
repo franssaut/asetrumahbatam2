@@ -291,6 +291,10 @@ export default function App() {
           setCurrentUser(user);
           setShowAuthModal(false);
         }}
+        onOpenSupabaseModal={() => {
+          setShowAuthModal(false);
+          setShowSupabaseModal(true);
+        }}
       />
 
       {/* Supabase Integration & Schema Modal */}

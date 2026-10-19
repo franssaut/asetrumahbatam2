@@ -140,6 +140,11 @@ export function initSupabaseAuth(onUserChange?: (user: UserProfile | null) => vo
         const profile = mapSupabaseUserToProfile(session.user, profileRow);
         setStoredUser(profile);
         if (onUserChange) onUserChange(profile);
+
+        // Clean up URL hash after processing OAuth or email confirmation token
+        if (typeof window !== 'undefined' && window.location.hash.includes('access_token=')) {
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        }
       }
     } else if (event === 'SIGNED_OUT') {
       // Only clear if not in demo mode
@@ -333,7 +338,17 @@ export async function signUpWithEmail(data: {
       }
 
       if (error) {
-        return { success: false, message: error.message };
+        let msg = error.message;
+        if (msg.includes('User already registered')) {
+          msg = 'Email ini sudah terdaftar di Supabase Auth. Silakan langsung masuk di tab Masuk Akun.';
+        } else if (msg.includes('Password should be at least')) {
+          msg = 'Kata sandi minimal 6 karakter.';
+        } else if (msg.includes('over_email_send_rate_limit')) {
+          msg = 'Terlalu banyak permintaan pengiriman email konfirmasi. Mohon tunggu beberapa saat.';
+        } else if (msg.toLowerCase().includes('invalid') && msg.toLowerCase().includes('email')) {
+          msg = 'Format alamat email tidak valid atau domain email ditolak oleh Supabase.';
+        }
+        return { success: false, message: msg };
       }
     } catch (err: any) {
       console.warn('Supabase signUp error:', err);
@@ -375,6 +390,43 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal mengirim email reset kata sandi.' };
+  }
+}
+
+/**
+ * Resend email confirmation link via Supabase Auth
+ */
+export async function resendConfirmationEmail(email: string): Promise<{ success: boolean; message: string }> {
+  const supabase = getSupabase();
+  if (!supabase) {
+    return { success: false, message: 'Supabase client belum aktif.' };
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://asetrumahbatam2.vercel.app';
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: cleanEmail,
+      options: {
+        emailRedirectTo: `${origin}`,
+      },
+    });
+
+    if (error) {
+      let msg = error.message;
+      if (msg.includes('rate limit')) {
+        msg = 'Terlalu banyak permintaan pengiriman email konfirmasi. Mohon tunggu beberapa saat.';
+      }
+      return { success: false, message: msg };
+    }
+
+    return {
+      success: true,
+      message: `Tautan konfirmasi baru berhasil dikirim ke ${cleanEmail}. Silakan periksa kotak masuk atau folder spam Anda.`,
+    };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Gagal mengirim ulang email konfirmasi.' };
   }
 }
 
