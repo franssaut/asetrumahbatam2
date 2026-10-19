@@ -11,6 +11,7 @@ export const PAGE_PATHS: Record<PageId, string> = {
   'tentang-kami': '/tentang-kami',
   'titip-properti': '/titip-properti',
   'faq-bantuan': '/faq-bantuan',
+  'dashboard-user': '/dashboard',
 };
 
 /**

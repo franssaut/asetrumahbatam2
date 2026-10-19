@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { PageId, PropertyItem } from './types';
+import { PageId, PropertyItem, UserProfile } from './types';
 import { PROPERTIES_LIST, BRAND_ASSETS } from './data/mockData';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { SupabaseModal } from './components/SupabaseModal';
+import { AuthModal } from './components/AuthModal';
 import { fetchProperties } from './lib/supabase';
+import { getStoredUser, signOutUser, demoLogin } from './lib/auth';
 import { 
   parseInitialRoute, 
   getPropertyPath, 
@@ -19,13 +21,29 @@ import { KonsultasiAgenPage } from './pages/KonsultasiAgenPage';
 import { TentangKamiPage } from './pages/TentangKamiPage';
 import { TitipPropertiPage } from './pages/TitipPropertiPage';
 import { FaqPage } from './pages/FaqPage';
+import { DashboardUserPage } from './pages/DashboardUserPage';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('beranda');
   const [properties, setProperties] = useState<PropertyItem[]>(PROPERTIES_LIST);
   const [selectedProperty, setSelectedProperty] = useState<PropertyItem>(PROPERTIES_LIST[0]);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [loadingProperties, setLoadingProperties] = useState(true);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
+
+  // Listen to auth changes
+  useEffect(() => {
+    const handleAuthChange = (e: any) => {
+      const user = e.detail !== undefined ? e.detail : getStoredUser();
+      setCurrentUser(user);
+    };
+
+    window.addEventListener('arb_auth_changed', handleAuthChange);
+    return () => {
+      window.removeEventListener('arb_auth_changed', handleAuthChange);
+    };
+  }, []);
 
   // Load properties from Supabase & synchronize route
   useEffect(() => {
@@ -87,6 +105,7 @@ export default function App() {
       'tentang-kami': 'Tentang Kami | Broker Terakreditasi Batam',
       'titip-properti': 'Titip Jual & Sewa Properti Batam | Aset Rumah Batam',
       'faq-bantuan': 'Pusat FAQ & Bantuan Legal Properti Batam',
+      'dashboard-user': 'Dashboard Pengguna & Properti Favorit | Aset Rumah Batam',
     };
     document.title = titles[page] || 'Aset Rumah Batam';
   };
@@ -112,10 +131,24 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleLogout = async () => {
+    await signOutUser();
+    setCurrentUser(null);
+    if (currentPage === 'dashboard-user') {
+      handleNavigate('beranda');
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[#f8f9ff] text-[#0b1c30] selection:bg-[#dbe1ff] selection:text-[#00174b]">
       {/* Top Header Navigation */}
-      <Navbar currentPage={currentPage} onNavigate={handleNavigate} />
+      <Navbar
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        user={currentUser}
+        onOpenAuth={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
+      />
 
       {/* Main Screen Content */}
       <main className="w-full pt-20 bg-[#f8f9ff] flex-1">
@@ -161,12 +194,77 @@ export default function App() {
         {currentPage === 'faq-bantuan' && (
           <FaqPage />
         )}
+
+        {currentPage === 'dashboard-user' && (
+          currentUser ? (
+            <DashboardUserPage
+              user={currentUser}
+              properties={properties}
+              onNavigate={handleNavigate}
+              onSelectProperty={handleSelectProperty}
+              onLogout={handleLogout}
+              onUpdateUser={(updated) => setCurrentUser(updated)}
+            />
+          ) : (
+            <div className="max-w-xl mx-auto my-16 px-4">
+              <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-lg border border-[#eff4ff] text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#eff4ff] flex items-center justify-center text-[#0051d5]">
+                  <span className="material-symbols-outlined text-[36px]">lock</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-bold text-[#0e1c2f]">
+                  Silakan Masuk ke Akun Anda
+                </h2>
+                <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
+                  Akses dashboard pribadi untuk melihat properti favorit tersimpan, riwayat pengajuan titip jual/sewa, dan jadwal konsultasi.
+                </p>
+
+                <div className="mt-8 space-y-3">
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="w-full py-3 px-6 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">login</span>
+                    <span>Masuk / Daftar Akun</span>
+                  </button>
+
+                  <div className="pt-2">
+                    <p className="text-xs text-gray-400 mb-2">Atau coba demo instan:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setCurrentUser(demoLogin('klien'))}
+                        className="p-2 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 transition-colors"
+                      >
+                        Demo Klien
+                      </button>
+                      <button
+                        onClick={() => setCurrentUser(demoLogin('agen'))}
+                        className="p-2 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                      >
+                        Demo Agen
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        )}
       </main>
 
       {/* Footer */}
       <Footer
         onNavigate={handleNavigate}
         onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+      />
+
+      {/* Auth Modal (Login / Register) */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          setShowAuthModal(false);
+        }}
       />
 
       {/* Supabase Integration & Schema Modal */}

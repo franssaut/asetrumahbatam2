@@ -6,7 +6,18 @@ export type PageId =
   | 'konsultasi-agen'
   | 'tentang-kami'
   | 'titip-properti'
-  | 'faq-bantuan';
+  | 'faq-bantuan'
+  | 'dashboard-user';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  role: 'klien' | 'agen' | 'investor' | 'admin';
+  avatarUrl?: string;
+  createdAt?: string;
+}
 
 export interface PropertyItem {
   id: string;

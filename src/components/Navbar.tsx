@@ -1,20 +1,42 @@
-import React, { useState } from 'react';
-import { PageId } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { PageId, UserProfile } from '../types';
 import { BRAND_ASSETS } from '../data/mockData';
 
 interface NavbarProps {
   currentPage: PageId;
   onNavigate: (page: PageId) => void;
+  user: UserProfile | null;
+  onOpenAuth: () => void;
+  onLogout: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  currentPage,
+  onNavigate,
+  user,
+  onOpenAuth,
+  onLogout,
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const navItems: { id: PageId; label: string }[] = [
     { id: 'beranda', label: 'Beranda' },
     { id: 'katalog-properti', label: 'Katalog Properti' },
-    { id: 'detail-properti', label: 'Detail Properti' },
     { id: 'panduan-legalitas-uwto', label: 'Panduan & UWTO' },
     { id: 'konsultasi-agen', label: 'Konsultasi Agen' },
     { id: 'tentang-kami', label: 'Tentang Kami' },
@@ -25,26 +47,45 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
   const handleNavClick = (id: PageId) => {
     onNavigate(id);
     setMobileMenuOpen(false);
+    setShowProfileMenu(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const getRoleBadge = (role: UserProfile['role']) => {
+    switch (role) {
+      case 'agen':
+        return { label: 'Agen', color: 'bg-emerald-100 text-emerald-800' };
+      case 'investor':
+        return { label: 'Investor', color: 'bg-purple-100 text-purple-800' };
+      case 'admin':
+        return { label: 'Admin', color: 'bg-rose-100 text-rose-800' };
+      default:
+        return { label: 'Klien', color: 'bg-blue-100 text-blue-800' };
+    }
+  };
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#eff4ff]">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#eff4ff]">
       <div className="h-20 max-w-7xl mx-auto px-4 md:px-8 flex items-center justify-between gap-4">
         {/* Left: Brand Logo & Navigation */}
         <div className="flex items-center gap-6 xl:gap-8">
           <button
             onClick={() => handleNavClick('beranda')}
-            className="flex items-center gap-2.5 text-left group focus:outline-none"
+            className="flex items-center gap-2.5 text-left group focus:outline-none cursor-pointer"
           >
             <img
               alt="Aset Rumah Batam Logo"
-              className="h-9 w-9 rounded-xl object-cover shadow-2xs ring-1 ring-[#0051d5]/15 transition-transform duration-200 group-hover:scale-105"
+              className="h-10 w-10 rounded-xl object-cover shadow-2xs ring-1 ring-[#0051d5]/15 transition-transform duration-200 group-hover:scale-105"
               src={BRAND_ASSETS.logoUrl}
             />
-            <span className="font-bold text-[18px] text-[#0e1c2f] tracking-tight group-hover:text-[#0051d5] transition-colors">
-              Aset Rumah Batam
-            </span>
+            <div className="flex flex-col">
+              <span className="font-extrabold text-[17px] text-[#0e1c2f] tracking-tight group-hover:text-[#0051d5] transition-colors leading-tight">
+                Aset Rumah Batam
+              </span>
+              <span className="text-[10px] text-gray-500 font-medium tracking-wide">
+                Portal Properti & Legalitas Resmi
+              </span>
+            </div>
           </button>
 
           {/* Desktop Nav */}
@@ -55,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
-                  className={`text-[14px] px-3.5 py-1.5 rounded-full transition-all duration-200 cursor-pointer ${
+                  className={`text-[13px] px-3.5 py-1.5 rounded-full transition-all duration-200 cursor-pointer ${
                     isActive
                       ? 'text-[#0051d5] font-bold bg-[#eff4ff] shadow-[inset_0_0_0_1px_rgba(0,81,213,0.12)]'
                       : 'text-[#44474c] font-medium hover:text-[#0b1c30] hover:bg-[#eff4ff]'
@@ -68,75 +109,129 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
           </nav>
         </div>
 
-        {/* Right: Phone, Titip Properti CTA, Avatar, Mobile Hamburger */}
-        <div className="flex items-center gap-3 md:gap-4">
+        {/* Right: Phone, Titip Properti CTA, Auth/User Menu, Mobile Hamburger */}
+        <div className="flex items-center gap-2.5 md:gap-3">
           <a
             className="hidden lg:flex items-center gap-1.5 text-[#44474c] hover:text-[#0051d5] px-2.5 py-1.5 transition-colors rounded-full"
             href={`tel:${BRAND_ASSETS.phoneRaw}`}
           >
-            <span className="material-symbols-outlined text-[20px] text-[#0051d5]">call</span>
-            <span className="text-[13px] font-semibold text-[#0e1c2f]">{BRAND_ASSETS.phone}</span>
+            <span className="material-symbols-outlined text-[18px] text-[#0051d5]">call</span>
+            <span className="text-[12px] font-semibold text-[#0e1c2f]">{BRAND_ASSETS.phone}</span>
           </a>
 
           <button
             onClick={() => handleNavClick('titip-properti')}
-            className="inline-flex items-center justify-center bg-[#0051d5] text-white hover:bg-[#316bf3] text-[14px] font-semibold px-5 py-2 rounded-full transition-all shadow-[0_4px_12px_rgba(0,81,213,0.18)] cursor-pointer active:scale-95"
+            className="hidden sm:inline-flex items-center justify-center bg-[#0051d5] text-white hover:bg-[#316bf3] text-[13px] font-semibold px-4 py-2 rounded-full transition-all shadow-[0_4px_12px_rgba(0,81,213,0.18)] cursor-pointer active:scale-95"
           >
             Titip Properti
           </button>
 
-          {/* Agent avatar badge */}
-          <div className="relative flex items-center pl-1">
+          {/* Authentication State Button / User Dropdown */}
+          {!user ? (
             <button
-              onClick={() => setShowProfileMenu(!showProfileMenu)}
-              className="relative focus:outline-none cursor-pointer"
-              title="Konsultan Properti Berjaga"
+              onClick={onOpenAuth}
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-full border border-[#0051d5]/30 bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white text-[13px] font-bold transition-all shadow-xs cursor-pointer active:scale-95"
             >
-              <img
-                alt="Agent Profile"
-                className="w-9 h-9 rounded-full object-cover ring-2 ring-[#0051d5]/20 hover:ring-[#0051d5] transition-all"
-                src={BRAND_ASSETS.userAvatar}
-              />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#316bf3] rounded-full ring-2 ring-white"></span>
+              <span className="material-symbols-outlined text-[18px]">account_circle</span>
+              <span>Masuk / Daftar</span>
             </button>
+          ) : (
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="flex items-center gap-2 p-1.5 pl-2 pr-3 rounded-full border border-gray-200 hover:border-[#0051d5]/40 hover:bg-[#eff4ff] transition-all cursor-pointer bg-white shadow-2xs"
+              >
+                <img
+                  alt={user.fullName}
+                  className="w-7 h-7 rounded-full object-cover ring-2 ring-[#0051d5]/20"
+                  src={
+                    user.avatarUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=0051d5&color=fff`
+                  }
+                />
+                <div className="hidden sm:block text-left text-xs leading-tight">
+                  <p className="font-bold text-[#0e1c2f] line-clamp-1 max-w-[100px]">
+                    {user.fullName.split(' ')[0]}
+                  </p>
+                  <span className={`text-[10px] font-semibold px-1 rounded ${getRoleBadge(user.role).color}`}>
+                    {getRoleBadge(user.role).label}
+                  </span>
+                </div>
+                <span className="material-symbols-outlined text-gray-400 text-[18px]">
+                  {showProfileMenu ? 'expand_less' : 'expand_more'}
+                </span>
+              </button>
 
-            {/* Profile Popup Menu */}
-            {showProfileMenu && (
-              <div className="absolute right-0 top-12 w-64 bg-white rounded-xl shadow-xl border border-[#eff4ff] p-3 text-left z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-3 pb-2 border-b border-[#eff4ff]">
-                  <img
-                    alt="Agent Profile"
-                    className="w-10 h-10 rounded-full object-cover"
-                    src={BRAND_ASSETS.userAvatar}
-                  />
-                  <div>
-                    <p className="text-[13px] font-bold text-[#0e1c2f]">Dewi Lestari</p>
-                    <p className="text-[11px] text-[#0051d5] font-semibold">Konsultan Siaga Batam</p>
+              {/* User Dropdown Menu */}
+              {showProfileMenu && (
+                <div className="absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-xl border border-[#eff4ff] p-3 text-left z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                    <img
+                      alt={user.fullName}
+                      className="w-10 h-10 rounded-full object-cover ring-1 ring-gray-200"
+                      src={
+                        user.avatarUrl ||
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=0051d5&color=fff`
+                      }
+                    />
+                    <div className="overflow-hidden">
+                      <p className="text-[13px] font-bold text-[#0e1c2f] truncate">{user.fullName}</p>
+                      <p className="text-[11px] text-gray-500 truncate">{user.email}</p>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded mt-1 inline-block ${getRoleBadge(user.role).color}`}>
+                        {getRoleBadge(user.role).label}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="py-2 space-y-1 text-[13px]">
+                    <button
+                      onClick={() => handleNavClick('dashboard-user')}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-gray-700 hover:text-[#0051d5] hover:bg-[#eff4ff] font-medium transition-colors cursor-pointer text-left"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-[#0051d5]">dashboard</span>
+                      <span>Dashboard Saya</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        handleNavClick('dashboard-user');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-gray-700 hover:text-[#0051d5] hover:bg-[#eff4ff] font-medium transition-colors cursor-pointer text-left"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-rose-500">favorite</span>
+                      <span>Properti Disimpan</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleNavClick('titip-properti')}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-gray-700 hover:text-[#0051d5] hover:bg-[#eff4ff] font-medium transition-colors cursor-pointer text-left"
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-emerald-600">add_home</span>
+                      <span>Titip Properti</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100">
+                    <button
+                      onClick={() => {
+                        setShowProfileMenu(false);
+                        onLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 font-medium transition-colors cursor-pointer text-left text-[13px]"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">logout</span>
+                      <span>Keluar (Logout)</span>
+                    </button>
                   </div>
                 </div>
-                <div className="pt-2 text-[12px] text-[#44474c] space-y-2">
-                  <p className="flex items-center gap-1.5 text-emerald-600 font-medium">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    Online Melayani Konsultasi
-                  </p>
-                  <a
-                    href={`https://wa.me/${BRAND_ASSETS.phoneRaw}?text=${encodeURIComponent('Halo saya ingin konsultasi properti Batam')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 w-full bg-[#0e1c2f] text-white py-2 rounded-lg font-medium hover:bg-[#0051d5] transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">chat</span>
-                    Chat Langsung via WhatsApp
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Mobile menu toggle */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="xl:hidden p-2 rounded-lg text-[#0e1c2f] hover:bg-[#eff4ff] focus:outline-none"
+            className="xl:hidden p-2 rounded-lg text-[#0e1c2f] hover:bg-[#eff4ff] focus:outline-none cursor-pointer"
             aria-label="Toggle menu"
           >
             <span className="material-symbols-outlined text-[26px]">
@@ -149,6 +244,48 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
       {/* Mobile Menu Dropdown */}
       {mobileMenuOpen && (
         <div className="xl:hidden bg-white border-b border-[#eff4ff] px-4 py-4 space-y-1 shadow-lg max-h-[calc(100vh-80px)] overflow-y-auto">
+          {/* User Status Bar in Mobile Drawer */}
+          {user ? (
+            <div className="p-3 mb-2 rounded-2xl bg-[#eff4ff] border border-[#0051d5]/15 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img
+                  alt={user.fullName}
+                  className="w-10 h-10 rounded-full object-cover ring-2 ring-white"
+                  src={
+                    user.avatarUrl ||
+                    `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName)}&background=0051d5&color=fff`
+                  }
+                />
+                <div>
+                  <p className="text-sm font-bold text-[#0e1c2f]">{user.fullName}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onNavigate('dashboard-user');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-[#0051d5] text-white text-xs font-semibold"
+              >
+                Dashboard
+              </button>
+            </div>
+          ) : (
+            <div className="pb-3 border-b border-gray-100 mb-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAuth();
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#0051d5] text-white font-bold text-[14px] shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[20px]">account_circle</span>
+                <span>Masuk / Daftar Akun</span>
+              </button>
+            </div>
+          )}
+
           {navItems.map((item) => {
             const isActive = currentPage === item.id;
             return (
@@ -168,7 +305,28 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
               </button>
             );
           })}
+
+          {user && (
+            <button
+              onClick={() => handleNavClick('dashboard-user')}
+              className={`w-full text-left px-4 py-3 rounded-xl text-[15px] font-medium transition-colors flex items-center justify-between ${
+                currentPage === 'dashboard-user'
+                  ? 'bg-[#eff4ff] text-[#0051d5] font-bold'
+                  : 'text-[#44474c] hover:bg-[#eff4ff]'
+              }`}
+            >
+              <span>Dashboard Profil & Favorit</span>
+              <span className="material-symbols-outlined text-[18px]">account_box</span>
+            </button>
+          )}
+
           <div className="pt-3 border-t border-[#eff4ff] flex flex-col gap-2">
+            <button
+              onClick={() => handleNavClick('titip-properti')}
+              className="w-full py-2.5 px-4 rounded-xl bg-[#0051d5] text-white font-semibold text-[14px] text-center"
+            >
+              Titip Properti Batam
+            </button>
             <a
               href={`tel:${BRAND_ASSETS.phoneRaw}`}
               className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#eff4ff] text-[#0051d5] font-semibold text-[14px]"
@@ -176,6 +334,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentPage, onNavigate }) => {
               <span className="material-symbols-outlined text-[18px]">call</span>
               {BRAND_ASSETS.phone}
             </a>
+            {user && (
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onLogout();
+                }}
+                className="w-full py-2 px-4 rounded-xl bg-red-50 text-red-600 font-semibold text-[13px] text-center flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[16px]">logout</span>
+                Keluar dari Akun
+              </button>
+            )}
           </div>
         </div>
       )}
