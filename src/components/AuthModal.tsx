@@ -5,7 +5,8 @@ import {
   signUpWithEmail, 
   demoLogin, 
   resetPasswordForEmail, 
-  resendConfirmationEmail
+  resendConfirmationEmail,
+  checkEmailExists
 } from '../lib/auth';
 import { getSupabaseConfig } from '../lib/supabase';
 import { BRAND_ASSETS } from '../data/mockData';
@@ -107,7 +108,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (!regFullName || !regEmail || !regPassword) {
+    const cleanEmail = regEmail.trim().toLowerCase();
+    if (!regFullName || !cleanEmail || !regPassword) {
       setErrorMsg('Nama lengkap, email, dan kata sandi wajib diisi.');
       return;
     }
@@ -119,8 +121,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
+      // Periksa apakah email sudah terdaftar
+      const check = await checkEmailExists(cleanEmail);
+      if (check.exists) {
+        setErrorMsg(check.message || 'Email ini sudah terdaftar. Anda tidak dapat mendaftar lagi dengan email yang sama. Silakan langsung masuk di tab Masuk Akun.');
+        setLoading(false);
+        return;
+      }
+
       const res = await signUpWithEmail({
-        email: regEmail,
+        email: cleanEmail,
         password: regPassword,
         fullName: regFullName,
         phone: regPhone,
@@ -266,6 +276,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <span className="material-symbols-outlined text-red-500 text-[18px] shrink-0 mt-0.5">error</span>
               <div className="flex-1 min-w-0">
                 <p>{errorMsg}</p>
+                {errorMsg.toLowerCase().includes('sudah terdaftar') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginEmail(regEmail);
+                      setActiveTab('login');
+                      setErrorMsg(null);
+                    }}
+                    className="mt-2 text-xs font-bold text-white bg-[#0051d5] hover:bg-[#316bf3] px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">login</span>
+                    <span>Beralih ke Tab Masuk Akun</span>
+                  </button>
+                )}
                 {(errorMsg.includes('dikonfirmasi') || errorMsg.includes('not confirmed')) && (
                   <button
                     type="button"

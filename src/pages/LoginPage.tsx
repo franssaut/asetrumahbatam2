@@ -6,7 +6,8 @@ import {
   signUpWithEmail, 
   demoLogin, 
   resetPasswordForEmail, 
-  resendConfirmationEmail 
+  resendConfirmationEmail,
+  checkEmailExists
 } from '../lib/auth';
 import { getSupabaseConfig } from '../lib/supabase';
 
@@ -45,6 +46,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [emailCheckLoading, setEmailCheckLoading] = useState(false);
+  const [emailExistsWarning, setEmailExistsWarning] = useState<string | null>(null);
 
   const [forgotEmail, setForgotEmail] = useState('');
 
@@ -75,6 +78,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setActiveTab(tab);
   };
 
+  const handleRegEmailBlur = async () => {
+    const clean = regEmail.trim().toLowerCase();
+    if (!clean || !clean.includes('@') || !clean.includes('.')) {
+      setEmailExistsWarning(null);
+      return;
+    }
+    setEmailCheckLoading(true);
+    try {
+      const check = await checkEmailExists(clean);
+      if (check.exists) {
+        setEmailExistsWarning(check.message || 'Email ini sudah terdaftar. Anda tidak dapat mendaftar lagi dengan email yang sama.');
+      } else {
+        setEmailExistsWarning(null);
+      }
+    } catch (e) {
+      setEmailExistsWarning(null);
+    } finally {
+      setEmailCheckLoading(false);
+    }
+  };
+
   // 1. Handle Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,12 +127,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
-  // 2. Handle Register (Strictly Agent Role)
+  // 2. Handle Register (Strictly Agent Role - Reject Duplicates)
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     handleClearAlerts();
 
-    if (!regFullName.trim() || !regEmail.trim() || !regPassword) {
+    const cleanEmail = regEmail.trim().toLowerCase();
+    if (!regFullName.trim() || !cleanEmail || !regPassword) {
       setErrorMsg('Mohon lengkapi nama, email, dan kata sandi.');
       return;
     }
@@ -130,8 +155,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setLoading(true);
     try {
+      // Periksa apakah email sudah terdaftar terlebih dahulu
+      const emailCheck = await checkEmailExists(cleanEmail);
+      if (emailCheck.exists) {
+        const warn = emailCheck.message || 'Email ini sudah terdaftar. Anda tidak dapat mendaftar lagi dengan email ini.';
+        setEmailExistsWarning(warn);
+        setErrorMsg(warn + ' Silakan langsung beralih ke tab Masuk Akun.');
+        setLoading(false);
+        return;
+      }
+
       const res = await signUpWithEmail({
-        email: regEmail,
+        email: cleanEmail,
         password: regPassword,
         fullName: regFullName,
         phone: regPhone,
@@ -151,6 +186,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           onLoginSuccess(res.user!);
         }, 1200);
       } else {
+        const isDuplicate = 
+          res.message?.toLowerCase().includes('sudah terdaftar') || 
+          res.message?.toLowerCase().includes('already registered') ||
+          res.message?.toLowerCase().includes('already exists');
+
+        if (isDuplicate) {
+          setEmailExistsWarning('Email ini sudah terdaftar di sistem.');
+        }
         setErrorMsg(res.message || 'Pendaftaran gagal. Silakan coba kembali.');
       }
     } catch (err: any) {
@@ -473,6 +516,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <div className="flex-1">
                   <p className="font-bold">Gagal Diproses</p>
                   <p className="mt-0.5 leading-relaxed">{errorMsg}</p>
+                  {errorMsg.toLowerCase().includes('sudah terdaftar') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoginEmail(regEmail || loginEmail);
+                        handleSwitchTab('login');
+                      }}
+                      className="mt-2.5 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#0051d5] text-white text-xs font-bold hover:bg-[#316bf3] transition-all cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">login</span>
+                      <span>Beralih ke Tab Masuk Akun</span>
+                    </button>
+                  )}
                   {errorMsg.includes('belum dikonfirmasi') && (
                     <button
                       type="button"
@@ -656,9 +712,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#0e1c2f] mb-1">
-                      Alamat Email
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#0e1c2f]">
+                        Alamat Email
+                      </label>
+                      {emailCheckLoading && (
+                        <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 border border-[#0051d5] border-t-transparent rounded-full animate-spin"></span>
+                          Memeriksa...
+                        </span>
+                      )}
+                    </div>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
                         mail
@@ -667,11 +731,37 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         type="email"
                         required
                         value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
+                        onBlur={handleRegEmailBlur}
+                        onChange={(e) => {
+                          setRegEmail(e.target.value);
+                          if (emailExistsWarning) setEmailExistsWarning(null);
+                        }}
                         placeholder="agent@email.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
+                        className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium ${
+                          emailExistsWarning
+                            ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-200 text-rose-900'
+                            : 'border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20'
+                        }`}
                       />
                     </div>
+                    {emailExistsWarning && (
+                      <div className="mt-1.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center justify-between gap-2 animate-in fade-in">
+                        <span className="flex items-center gap-1 font-medium">
+                          <span className="material-symbols-outlined text-[15px] text-rose-600 shrink-0">error</span>
+                          {emailExistsWarning}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLoginEmail(regEmail);
+                            handleSwitchTab('login');
+                          }}
+                          className="shrink-0 text-[#0051d5] hover:text-[#003bb5] font-bold underline cursor-pointer"
+                        >
+                          Masuk Sekarang →
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -749,13 +839,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={loading || Boolean(emailExistsWarning)}
+                  className={`w-full py-3.5 px-4 rounded-xl text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                    emailExistsWarning
+                      ? 'bg-gray-400 hover:bg-gray-400'
+                      : 'bg-emerald-600 hover:bg-emerald-700 active:scale-98 shadow-emerald-600/20'
+                  }`}
                 >
                   {loading ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                       <span>Mendaftarkan Akun Agent...</span>
+                    </>
+                  ) : emailExistsWarning ? (
+                    <>
+                      <span className="material-symbols-outlined text-[18px]">lock</span>
+                      <span>Email Sudah Terdaftar (Beralih ke Masuk)</span>
                     </>
                   ) : (
                     <>

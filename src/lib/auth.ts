@@ -255,7 +255,57 @@ export async function signInWithEmail(
 }
 
 /**
- * Register user with email, password, full name, phone, and role via Supabase Auth
+ * Check whether an email is already registered across Demo, Local Storage, or Supabase Database
+ */
+export async function checkEmailExists(email: string): Promise<{ exists: boolean; message?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return { exists: false };
+
+  // 1. Check Demo Accounts
+  if (Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail)) {
+    return {
+      exists: true,
+      message: 'Email ini adalah akun demo sistem resmi ARB. Silakan langsung masuk.',
+    };
+  }
+
+  // 2. Check Local Registered Users
+  try {
+    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+    if (registeredUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return {
+        exists: true,
+        message: 'Email ini sudah terdaftar di sistem. Anda tidak dapat mendaftar lagi dengan email yang sama.',
+      };
+    }
+  } catch (e) {}
+
+  // 3. Check Supabase 'profiles' table
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      if (data && data.id) {
+        return {
+          exists: true,
+          message: 'Email ini sudah terdaftar di database Supabase. Silakan langsung masuk.',
+        };
+      }
+    } catch (e) {}
+  }
+
+  return { exists: false };
+}
+
+/**
+ * Register user with email, password, full name, phone, and role via Supabase Auth.
+ * Strictly prevents registration if the email is already registered.
  */
 export async function signUpWithEmail(data: {
   email: string;
@@ -265,10 +315,60 @@ export async function signUpWithEmail(data: {
   role?: UserProfile['role'];
 }): Promise<{ success: boolean; user?: UserProfile; message?: string; needsVerification?: boolean }> {
   const cleanEmail = data.email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+    return { success: false, message: 'Format alamat email tidak valid.' };
+  }
+
   // Pendaftaran baru hanya untuk role agent (Admin dikelola khusus oleh sistem)
   const role: UserProfile['role'] = 'agent';
   const fullName = data.fullName.trim();
   const phone = data.phone?.trim() || '';
+
+  // 1. Cek Akun Demo Sistem
+  const isDemoEmail = Object.values(DEMO_USERS).some(
+    (u) => u.email.toLowerCase() === cleanEmail
+  );
+  if (isDemoEmail) {
+    return {
+      success: false,
+      message: 'Email ini sudah terdaftar sebagai akun sistem ARB. Anda tidak dapat mendaftar lagi dengan email ini. Silakan langsung masuk di tab Masuk Akun.',
+    };
+  }
+
+  // 2. Cek Pengguna yang Terdaftar di Local Storage
+  try {
+    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+    const existingLocal = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (existingLocal) {
+      return {
+        success: false,
+        message: 'Email ini sudah terdaftar. Anda tidak dapat mendaftar lagi dengan email yang sama. Silakan langsung masuk menggunakan akun Anda atau klik Lupa Sandi.',
+      };
+    }
+  } catch (e) {}
+
+  const supabase = getSupabase();
+
+  // 3. Cek apakah email sudah ada di tabel 'profiles' Supabase
+  if (supabase) {
+    try {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .eq('email', cleanEmail)
+        .maybeSingle();
+
+      if (existingProfile && existingProfile.id) {
+        return {
+          success: false,
+          message: 'Email ini sudah terdaftar di sistem. Anda tidak dapat mendaftar lagi dengan email ini. Silakan langsung masuk di tab Masuk Akun.',
+        };
+      }
+    } catch (checkErr) {
+      // Abaikan jika permission RLS tabel profiles membatasi select anonim
+    }
+  }
 
   const newProfile: UserProfile = {
     id: 'user_' + Date.now(),
@@ -280,22 +380,7 @@ export async function signUpWithEmail(data: {
     createdAt: new Date().toISOString(),
   };
 
-  // Local backup
-  try {
-    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
-      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
-    
-    const existingIndex = registeredUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
-    if (existingIndex >= 0) {
-      registeredUsers[existingIndex] = { email: cleanEmail, password: data.password, profile: newProfile };
-    } else {
-      registeredUsers.push({ email: cleanEmail, password: data.password, profile: newProfile });
-    }
-    localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
-  } catch (e) {}
-
-  // Attempt Supabase Auth registration
-  const supabase = getSupabase();
+  // 4. Lakukan pendaftaran ke Supabase Auth
   if (supabase) {
     try {
       const { data: authData, error } = await supabase.auth.signUp({
@@ -310,10 +395,58 @@ export async function signUpWithEmail(data: {
         },
       });
 
-      if (!error && authData?.user) {
+      // Tangani error dari Supabase jika email sudah terdaftar
+      if (error) {
+        let msg = error.message;
+        const lowerMsg = msg.toLowerCase();
+        if (
+          lowerMsg.includes('already registered') ||
+          lowerMsg.includes('already exists') ||
+          lowerMsg.includes('user already registered') ||
+          lowerMsg.includes('identity already exists')
+        ) {
+          return {
+            success: false,
+            message: 'Email ini sudah terdaftar di sistem. Anda tidak dapat mendaftar lagi dengan email yang sama. Silakan langsung masuk di tab Masuk Akun atau gunakan fitur Lupa Sandi.',
+          };
+        }
+        if (msg.includes('Password should be at least')) {
+          msg = 'Kata sandi minimal 6 karakter.';
+        } else if (msg.includes('over_email_send_rate_limit')) {
+          msg = 'Terlalu banyak permintaan pendaftaran. Mohon tunggu beberapa saat sebelum mencoba lagi.';
+        } else if (lowerMsg.includes('invalid') && lowerMsg.includes('email')) {
+          msg = 'Format alamat email tidak valid atau domain email ditolak oleh Supabase.';
+        }
+        return { success: false, message: msg };
+      }
+
+      if (authData?.user) {
+        // PERIKSA IDENTITAS: Di Supabase, jika email konfirmasi aktif dan email SUDAH terdaftar sebelumnya,
+        // Supabase mengembalikan authData.user dengan identities: [] (kosong) agar tidak membocorkan enumerasi!
+        if (
+          Array.isArray(authData.user.identities) &&
+          authData.user.identities.length === 0
+        ) {
+          return {
+            success: false,
+            message: 'Email ini sudah terdaftar di Supabase Auth. Anda tidak dapat mendaftar lagi dengan email ini. Silakan langsung masuk di tab Masuk Akun atau gunakan fitur Lupa Sandi.',
+          };
+        }
+
+        // Cek jika akun telah dibuat sebelumnya (bukan pendaftaran baru)
+        if (authData.user.created_at) {
+          const createdTime = new Date(authData.user.created_at).getTime();
+          if (Date.now() - createdTime > 20000 && !authData.session) {
+            return {
+              success: false,
+              message: 'Email ini sudah terdaftar di sistem. Anda tidak dapat mendaftar lagi dengan email yang sama. Silakan langsung masuk di tab Masuk Akun.',
+            };
+          }
+        }
+
         newProfile.id = authData.user.id;
 
-        // Attempt to upsert into 'profiles' table in Supabase
+        // Upsert data profil agent ke tabel 'profiles' di Supabase
         try {
           await supabase.from('profiles').upsert([
             {
@@ -330,13 +463,21 @@ export async function signUpWithEmail(data: {
           console.warn('Profiles table upsert notice:', dbErr);
         }
 
-        // Check if user session was generated or if email verification is required
+        // Simpan ke local storage HANYA untuk pendaftaran baru yang valid
+        try {
+          const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+            JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+          if (!registeredUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+            registeredUsers.push({ email: cleanEmail, password: data.password, profile: newProfile });
+            localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
+          }
+        } catch (e) {}
+
         if (authData.session) {
           setStoredUser(newProfile);
           return { success: true, user: newProfile };
         } else {
-          // Supabase project has email confirmation enabled
-          setStoredUser(newProfile); // allow immediate portal entry
+          setStoredUser(newProfile);
           return {
             success: true,
             user: newProfile,
@@ -345,26 +486,21 @@ export async function signUpWithEmail(data: {
           };
         }
       }
-
-      if (error) {
-        let msg = error.message;
-        if (msg.includes('User already registered')) {
-          msg = 'Email ini sudah terdaftar di Supabase Auth. Silakan langsung masuk di tab Masuk Akun.';
-        } else if (msg.includes('Password should be at least')) {
-          msg = 'Kata sandi minimal 6 karakter.';
-        } else if (msg.includes('over_email_send_rate_limit')) {
-          msg = 'Terlalu banyak permintaan pengiriman email konfirmasi. Mohon tunggu beberapa saat.';
-        } else if (msg.toLowerCase().includes('invalid') && msg.toLowerCase().includes('email')) {
-          msg = 'Format alamat email tidak valid atau domain email ditolak oleh Supabase.';
-        }
-        return { success: false, message: msg };
-      }
     } catch (err: any) {
       console.warn('Supabase signUp error:', err);
     }
   }
 
-  // Auto-login registered user for smooth experience
+  // Fallback lokal jika offline: Simpan akun baru
+  try {
+    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+    if (!registeredUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      registeredUsers.push({ email: cleanEmail, password: data.password, profile: newProfile });
+      localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
+    }
+  } catch (e) {}
+
   setStoredUser(newProfile);
   return { success: true, user: newProfile };
 }
