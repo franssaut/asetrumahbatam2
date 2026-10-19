@@ -353,57 +353,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Uji Coba Cepat 1-Klik (Akun Demo):
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => handleDemoClick('klien')}
-                    className="p-2.5 rounded-xl border border-blue-100 bg-blue-50/50 hover:bg-blue-100/60 hover:border-blue-300 transition-all text-left group cursor-pointer"
+                    className="p-3 rounded-xl border border-blue-200 bg-blue-50/60 hover:bg-blue-100 hover:border-blue-400 transition-all text-left group cursor-pointer shadow-xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Klien</span>
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded">👤 Klien</span>
                       <span className="material-symbols-outlined text-blue-600 text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
                     </div>
-                    <p className="text-xs font-semibold text-[#0e1c2f] mt-1 line-clamp-1">Budi Santoso</p>
-                    <p className="text-[10px] text-gray-500">Pembeli Prioritas</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDemoClick('agen')}
-                    className="p-2.5 rounded-xl border border-emerald-100 bg-emerald-50/50 hover:bg-emerald-100/60 hover:border-emerald-300 transition-all text-left group cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Agen</span>
-                      <span className="material-symbols-outlined text-emerald-600 text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
-                    </div>
-                    <p className="text-xs font-semibold text-[#0e1c2f] mt-1 line-clamp-1">Hendra Wijaya</p>
-                    <p className="text-[10px] text-gray-500">Konsultan Senior</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleDemoClick('investor')}
-                    className="p-2.5 rounded-xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100/60 hover:border-purple-300 transition-all text-left group cursor-pointer"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">Investor</span>
-                      <span className="material-symbols-outlined text-purple-600 text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
-                    </div>
-                    <p className="text-xs font-semibold text-[#0e1c2f] mt-1 line-clamp-1">Michael Tan</p>
-                    <p className="text-[10px] text-gray-500">Singapore/Global</p>
+                    <p className="text-xs font-bold text-[#0e1c2f] mt-1.5 line-clamp-1">Budi Santoso</p>
+                    <p className="text-[10px] text-gray-500">Akun Klien / Pembeli</p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleDemoClick('admin')}
-                    className="p-2.5 rounded-xl border border-rose-100 bg-rose-50/50 hover:bg-rose-100/60 hover:border-rose-300 transition-all text-left group cursor-pointer"
+                    className="p-3 rounded-xl border border-rose-200 bg-rose-50/60 hover:bg-rose-100 hover:border-rose-400 transition-all text-left group cursor-pointer shadow-xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">Admin</span>
+                      <span className="text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">🛡️ Admin</span>
                       <span className="material-symbols-outlined text-rose-600 text-[16px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
                     </div>
-                    <p className="text-xs font-semibold text-[#0e1c2f] mt-1 line-clamp-1">Admin Utama</p>
-                    <p className="text-[10px] text-gray-500">Full Dashboard</p>
+                    <p className="text-xs font-bold text-[#0e1c2f] mt-1.5 line-clamp-1">Admin Utama ARB</p>
+                    <p className="text-[10px] text-gray-500">Full Akses Kelola Portal</p>
                   </button>
                 </div>
               </div>
@@ -473,44 +447,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5 uppercase tracking-wider">
                   Peran / Kategori Akun
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setRegRole('klien')}
-                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
                       regRole === 'klien'
                         ? 'border-[#0051d5] bg-[#eff4ff] text-[#0051d5] font-bold shadow-xs'
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                     }`}
                   >
-                    <span className="block text-xs">👤 Klien</span>
-                    <span className="text-[10px] text-gray-500 font-normal">Pembeli / Penjual</span>
+                    <span className="block text-xs font-bold">👤 Klien</span>
+                    <span className="text-[10px] text-gray-500 font-normal">Pembeli / Penjual Properti</span>
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setRegRole('agen')}
-                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                      regRole === 'agen'
-                        ? 'border-[#0051d5] bg-[#eff4ff] text-[#0051d5] font-bold shadow-xs'
+                    onClick={() => setRegRole('admin')}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                      regRole === 'admin'
+                        ? 'border-rose-500 bg-rose-50 text-rose-700 font-bold shadow-xs'
                         : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                     }`}
                   >
-                    <span className="block text-xs">👔 Agen</span>
-                    <span className="text-[10px] text-gray-500 font-normal">Broker Properti</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRegRole('investor')}
-                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                      regRole === 'investor'
-                        ? 'border-[#0051d5] bg-[#eff4ff] text-[#0051d5] font-bold shadow-xs'
-                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                    }`}
-                  >
-                    <span className="block text-xs">💼 Investor</span>
-                    <span className="text-[10px] text-gray-500 font-normal">Pemodal / Aset</span>
+                    <span className="block text-xs font-bold">🛡️ Admin</span>
+                    <span className="text-[10px] text-gray-500 font-normal">Pengelola Portal Properti</span>
                   </button>
                 </div>
               </div>

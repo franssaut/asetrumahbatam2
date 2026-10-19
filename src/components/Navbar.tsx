@@ -53,12 +53,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const getRoleBadge = (role: UserProfile['role']) => {
     switch (role) {
-      case 'agen':
-        return { label: 'Agen', color: 'bg-emerald-100 text-emerald-800' };
-      case 'investor':
-        return { label: 'Investor', color: 'bg-purple-100 text-purple-800' };
       case 'admin':
         return { label: 'Admin', color: 'bg-rose-100 text-rose-800' };
+      case 'klien':
       default:
         return { label: 'Klien', color: 'bg-blue-100 text-blue-800' };
     }

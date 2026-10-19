@@ -8,30 +8,12 @@ const FAVORITES_STORAGE_KEY = 'arb_favorite_properties';
 export const DEMO_USERS: Record<UserProfile['role'], UserProfile> = {
   klien: {
     id: 'demo-klien-01',
-    email: 'budi.santoso@gmail.com',
+    email: 'klien@asetrumahbatam.com',
     fullName: 'Budi Santoso',
     phone: '+62 812-7000-8812',
     role: 'klien',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: '2025-01-15T08:30:00Z',
-  },
-  agen: {
-    id: 'demo-agen-02',
-    email: 'hendra.wijaya@asetrumahbatam.com',
-    fullName: 'Hendra Wijaya, S.T.',
-    phone: '+62 811-7788-990',
-    role: 'agen',
-    avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=200&q=80',
-    createdAt: '2024-06-10T10:00:00Z',
-  },
-  investor: {
-    id: 'demo-investor-03',
-    email: 'michael.tan@singapore-invest.sg',
-    fullName: 'Michael Tan',
-    phone: '+65 9123 4567',
-    role: 'investor',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-    createdAt: '2024-11-20T14:15:00Z',
   },
   admin: {
     id: 'demo-admin-04',
@@ -52,7 +34,8 @@ function mapSupabaseUserToProfile(supabaseUser: any, profileDbRow?: any): UserPr
   const email = supabaseUser.email || profileDbRow?.email || '';
   const fullName = profileDbRow?.full_name || metadata.full_name || metadata.name || email.split('@')[0];
   const phone = profileDbRow?.phone || metadata.phone || '';
-  const role = (profileDbRow?.role || metadata.role || 'klien') as UserProfile['role'];
+  const rawRole = profileDbRow?.role || metadata.role || 'klien';
+  const role: UserProfile['role'] = rawRole === 'admin' ? 'admin' : 'klien';
   const avatarUrl = profileDbRow?.avatar_url || metadata.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName)}&background=0051d5&color=fff`;
 
   return {

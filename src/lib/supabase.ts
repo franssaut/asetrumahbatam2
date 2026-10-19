@@ -478,7 +478,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     email TEXT UNIQUE NOT NULL,
     full_name TEXT,
     phone TEXT,
-    role TEXT DEFAULT 'klien' CHECK (role IN ('klien', 'agen', 'investor', 'admin')),
+    role TEXT DEFAULT 'klien' CHECK (role IN ('klien', 'admin')),
     avatar_url TEXT
 );
 

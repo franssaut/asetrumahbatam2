@@ -263,10 +263,10 @@ export default function App() {
                         Demo Klien
                       </button>
                       <button
-                        onClick={() => setCurrentUser(demoLogin('agen'))}
-                        className="p-2 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                        onClick={() => setCurrentUser(demoLogin('admin'))}
+                        className="p-2 rounded-lg bg-rose-50 text-rose-700 text-xs font-semibold hover:bg-rose-100 transition-colors"
                       >
-                        Demo Agen
+                        Demo Admin
                       </button>
                     </div>
                   </div>

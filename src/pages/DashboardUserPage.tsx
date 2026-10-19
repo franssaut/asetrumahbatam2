@@ -368,8 +368,8 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   const userManagedProperties = useMemo(() => {
     const customIds = new Set(getLocalCustomProperties().map((p) => p.id.toLowerCase()));
 
-    // In agent or admin mode, they can manage all properties (with custom prioritized)
-    if (user.role === 'agen' || user.role === 'admin') {
+    // In admin mode, they can manage all properties (with custom prioritized)
+    if (user.role === 'admin') {
       return properties;
     }
 
@@ -545,7 +545,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       ownerId: user.id,
       agentName: user.fullName || 'Konsultan ARB',
       agentPhone: user.phone || '+62 823-9105-9216',
-      agentRole: user.role === 'agen' ? 'Agen Resmi Aset Rumah Batam' : 'Pemilik Terverifikasi',
+      agentRole: user.role === 'admin' ? 'Administrator ARB' : 'Pemilik Terverifikasi',
       createdAt: new Date().toISOString(),
     };
 
@@ -735,12 +735,9 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
 
   const getRoleBadge = (role: UserProfile['role']) => {
     switch (role) {
-      case 'agen':
-        return { label: 'Konsultan Agen Resmi', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
-      case 'investor':
-        return { label: 'Investor Prioritas', color: 'bg-purple-100 text-purple-800 border-purple-300' };
       case 'admin':
         return { label: 'Administrator Portal', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+      case 'klien':
       default:
         return { label: 'Klien Pembeli / Penjual', color: 'bg-blue-100 text-blue-800 border-blue-300' };
     }
@@ -2055,63 +2052,6 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
               </div>
             )}
 
-            {/* Sub-view for AGEN */}
-            {user.role === 'agen' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
-                    <span className="text-xs text-gray-500 font-semibold">Estimasi Saldo Komisi Listing</span>
-                    <p className="text-2xl font-black text-emerald-800">Rp 48.500.000</p>
-                    <p className="text-[11px] text-emerald-700">Standar AREBI 2.5% Closing Transaksi</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
-                    <span className="text-xs text-gray-500 font-semibold">Leads Klien Masuk</span>
-                    <p className="text-2xl font-black text-[#0e1c2f]">14 Calon Buyer</p>
-                    <p className="text-[11px] text-gray-500">6 Menunggu Jadwal Survei</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
-                    <span className="text-xs text-gray-500 font-semibold">Akreditasi Agen</span>
-                    <p className="text-sm font-bold text-emerald-800 mt-2">AREBI Certified No. 4921</p>
-                    <p className="text-[11px] text-emerald-600">Aktif s/d 2027</p>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
-                  <h4 className="font-bold text-xs text-[#0e1c2f] uppercase mb-2">Tindakan Cepat Agen:</h4>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => setShowQuickSubmitModal(true)} className="px-3 py-1.5 rounded-lg bg-[#0051d5] text-white text-xs font-semibold">
-                      + Input Listing Portofolio Baru
-                    </button>
-                    <button onClick={() => setActiveTab('bookings')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
-                      Kelola Janji Temu Klien
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sub-view for INVESTOR */}
-            {user.role === 'investor' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
-                    <span className="text-xs text-gray-500 font-semibold">Rata-rata Yield Sewa Ruko</span>
-                    <p className="text-2xl font-black text-purple-800">7.8% - 9.2% / thn</p>
-                    <p className="text-[11px] text-purple-700">Pusat Bisnis Nagoya & Batam Center</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
-                    <span className="text-xs text-gray-500 font-semibold">Regulasi Kepemilikan WNA</span>
-                    <p className="text-sm font-bold text-[#0e1c2f] mt-1">PP No. 18 / 2021 (Hak Pakai)</p>
-                    <p className="text-[11px] text-gray-500">Paspor & Visa Valid Tanpa Perlu PT PMA</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
-                    <span className="text-xs text-gray-500 font-semibold">Peluang Capital Gain</span>
-                    <p className="text-2xl font-black text-emerald-700">12.5% / thn</p>
-                    <p className="text-[11px] text-gray-500">Kawasan KEK Nongsa & Kabil FTZ</p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Sub-view for ADMIN */}
             {user.role === 'admin' && (
@@ -2237,9 +2177,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                     onChange={(e) => setEditRole(e.target.value as UserProfile['role'])}
                     className="w-full px-3.5 py-2 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
                   >
-                    <option value="klien">👤 Klien (Pembeli / Penjual Properti)</option>
-                    <option value="agen">👔 Agen (Konsultan Properti Resmi)</option>
-                    <option value="investor">💼 Investor (Pemodal Real Estat)</option>
+                    <option value="klien">👤 Klien (Pengguna Portal & Titip Listing)</option>
                     <option value="admin">🛡️ Administrator (Akses Penuh Portal)</option>
                   </select>
                 </div>
@@ -2333,7 +2271,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 <h3 className="text-base font-bold text-[#0e1c2f]">Ganti Peran Demo (Testing Cepat)</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Klien, Agen, Investor, atau Admin tanpa perlu logout.
+                Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Klien atau Admin tanpa perlu logout.
               </p>
 
               <div className="space-y-2.5">
@@ -2345,35 +2283,9 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 >
                   <div>
                     <p className="text-xs font-bold text-[#0e1c2f]">👤 Budi Santoso (Klien Prioritas)</p>
-                    <p className="text-[11px] text-gray-500">Mencari rumah tinggal & investasi di Batam</p>
+                    <p className="text-[11px] text-gray-500">Mencari rumah tinggal, titip jual/sewa & investasi di Batam</p>
                   </div>
                   {user.role === 'klien' && <span className="text-xs text-[#0051d5] font-bold">Sedang Aktif</span>}
-                </button>
-
-                <button
-                  onClick={() => onUpdateUser(demoLogin('agen'))}
-                  className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                    user.role === 'agen' ? 'border-emerald-500 bg-emerald-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-bold text-[#0e1c2f]">👔 Hendra Wijaya (Konsultan Agen)</p>
-                    <p className="text-[11px] text-gray-500">Spesialis legalitas UWTO BP Batam</p>
-                  </div>
-                  {user.role === 'agen' && <span className="text-xs text-emerald-600 font-bold">Sedang Aktif</span>}
-                </button>
-
-                <button
-                  onClick={() => onUpdateUser(demoLogin('investor'))}
-                  className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                    user.role === 'investor' ? 'border-purple-500 bg-purple-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-bold text-[#0e1c2f]">💼 Michael Tan (Investor Internasional)</p>
-                    <p className="text-[11px] text-gray-500">Fokus pada ruko komersial & lahan industri</p>
-                  </div>
-                  {user.role === 'investor' && <span className="text-xs text-purple-600 font-bold">Sedang Aktif</span>}
                 </button>
 
                 <button
