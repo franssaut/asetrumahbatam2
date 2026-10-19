@@ -1240,26 +1240,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </p>
                     </div>
 
-                    {/* Indikator Domain Redirect */}
-                    <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                      <div>
-                        <span className="font-bold flex items-center gap-1 text-amber-900">
-                          <span className="material-symbols-outlined text-[15px] text-amber-700">link</span>
-                          <span>Tautan email akan mengarah ke:</span>
-                        </span>
-                        <span className="font-mono text-amber-800 font-semibold break-all">{activeSiteUrl}</span>
-                      </div>
-                      {onOpenSupabaseModal && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenSupabaseModal('resend')}
-                          className="text-[#0051d5] hover:underline font-bold text-[11px] shrink-0 cursor-pointer"
-                        >
-                          Ubah Domain / URL Supabase →
-                        </button>
-                      )}
-                    </div>
-
                     <div>
                       <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
                         Alamat Email Terdaftar
@@ -1361,22 +1341,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         className="py-3 px-4 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
                       >
                         Batal
-                      </button>
-                    </div>
-
-                    {/* Tombol switch ke mode sudah punya kode OTP */}
-                    <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/70 text-xs flex items-center justify-between">
-                      <span className="text-indigo-900 font-medium">Sudah memiliki 6-digit kode OTP dari email?</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowDirectOtpMode(true);
-                          handleClearAlerts();
-                        }}
-                        className="text-[#0051d5] font-bold hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <span>Masukkan Kode</span>
-                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                       </button>
                     </div>
 

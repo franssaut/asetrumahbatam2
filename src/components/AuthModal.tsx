@@ -807,25 +807,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/80 text-[11px] text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                    <div>
-                      <span className="font-bold flex items-center gap-1 text-amber-900">
-                        <span className="material-symbols-outlined text-[14px] text-amber-700">link</span>
-                        <span>Tautan mengarah ke:</span>
-                      </span>
-                      <span className="font-mono text-amber-800 font-semibold break-all">{getAuthRedirectBaseUrl()}</span>
-                    </div>
-                    {onOpenSupabaseModal && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenSupabaseModal('resend')}
-                        className="text-[#0051d5] hover:underline font-bold text-[10px] shrink-0 cursor-pointer"
-                      >
-                        Ubah Domain →
-                      </button>
-                    )}
-                  </div>
-
                   <div>
                     <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5 uppercase tracking-wider">
                       Email Akun Supabase
@@ -915,22 +896,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       </>
                     )}
                   </button>
-
-                  {/* Tombol switch jika sudah punya kode OTP */}
-                  <div className="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200/80 text-[11px] flex items-center justify-between">
-                    <span className="text-indigo-900 font-medium">Sudah menerima 6-digit kode OTP di email?</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowDirectOtpMode(true);
-                        setErrorMsg(null);
-                        setSuccessMsg(null);
-                      }}
-                      className="text-[#0051d5] font-bold hover:underline cursor-pointer"
-                    >
-                      Masukkan Kode →
-                    </button>
-                  </div>
 
                   {/* Alat Aktivasi Instan jika link nyasar ke localhost */}
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs space-y-2">
