@@ -846,19 +846,61 @@ export async function resetPasswordForEmail(
     const redirectBase = targetRedirectBase || getAuthRedirectBaseUrl();
     const fullRedirectUrl = `${redirectBase}/login?tab=reset_password`;
 
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+    // Percobaan 1: Mengirim dengan custom redirectTo lengkap
+    let { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: fullRedirectUrl,
     });
+
+    // Fallback Retry: Jika gagal karena kemungkinan penolakan redirectTo oleh Supabase allowlist
+    if (error && (error.message?.toLowerCase().includes('error sending recovery email') || error.message?.toLowerCase().includes('redirect'))) {
+      try {
+        // Coba dengan redirectBase saja
+        const retry1 = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: redirectBase,
+        });
+        if (!retry1.error) {
+          error = null;
+        } else {
+          // Coba tanpa parameter redirectTo (menggunakan Site URL default Supabase)
+          const retry2 = await supabase.auth.resetPasswordForEmail(cleanEmail);
+          if (!retry2.error) {
+            error = null;
+          } else {
+            error = retry2.error;
+          }
+        }
+      } catch (retryErr) {
+        // Tetap gunakan error asli
+      }
+    }
 
     if (error) {
       let msg = error.message;
       const lower = msg.toLowerCase();
+      let isRecoveryEmailError = false;
+
       if (lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
         msg = 'Batas pengiriman email bawaan Supabase tercapai (3 email/jam). Aktifkan Custom SMTP Resend di Supabase Dashboard (menu Supabase > Tab Resend SMTP) untuk pengiriman tanpa batas kuota.';
       } else if (lower.includes('user not found')) {
         msg = 'Email tidak ditemukan di Supabase Auth. Mohon periksa kembali alamat email Anda.';
+      } else if (lower.includes('error sending recovery email')) {
+        isRecoveryEmailError = true;
+        msg = 'Gagal mengirim email pemulihan (Error sending recovery email).\n\n' +
+              'Penyebab paling sering & cara mengatasinya:\n' +
+              '1. Batasan Akun Percobaan Resend (onboarding@resend.dev):\n' +
+              '   Resend versi gratis hanya mengizinkan pengiriman email ke alamat email akun Resend Anda sendiri. Silakan coba masukkan email yang Anda daftarkan di Resend.\n' +
+              '2. Pengaturan Custom SMTP Supabase:\n' +
+              '   Buka Supabase Dashboard > Authentication > SMTP Settings, pastikan:\n' +
+              '   • Host: smtp.resend.com\n' +
+              '   • Port: 465 (SSL) atau 587 (TLS)\n' +
+              '   • User: resend (huruf kecil semua, bukan alamat email Anda!)\n' +
+              '   • Password: API Key Resend Anda (diawali re_...)\n' +
+              '   • Sender Email: onboarding@resend.dev (atau domain terverifikasi Anda)\n' +
+              '3. Kirim ke Semua Email (Bebas):\n' +
+              '   Tambahkan dan verifikasi domain Anda sendiri di resend.com/domains.';
       }
-      return { success: false, message: msg };
+
+      return { success: false, message: msg, isRecoveryEmailError };
     }
 
     const resendCfg = getResendConfig();

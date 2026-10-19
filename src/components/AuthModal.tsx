@@ -413,7 +413,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-start gap-2.5 animate-in fade-in">
               <span className="material-symbols-outlined text-red-500 text-[18px] shrink-0 mt-0.5">error</span>
               <div className="flex-1 min-w-0">
-                <p>{errorMsg}</p>
+                <p className="whitespace-pre-line leading-relaxed">{errorMsg}</p>
                 {errorMsg.toLowerCase().includes('sudah terdaftar') && (
                   <button
                     type="button"
@@ -438,6 +438,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <span className="material-symbols-outlined text-[15px]">send</span>
                     <span>{resending ? 'Mengirim...' : 'Kirim Ulang Tautan Konfirmasi Email'}</span>
                   </button>
+                )}
+                {(errorMsg.toLowerCase().includes('recovery email') || errorMsg.toLowerCase().includes('resend')) && (
+                  <div className="mt-3 p-3 rounded-xl bg-white/90 border border-red-200/90 text-xs space-y-2">
+                    <p className="font-bold text-red-950 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[16px] text-amber-600">lightbulb</span>
+                      <span>Petunjuk Cepat Resend / SMTP:</span>
+                    </p>
+                    <p className="text-[11px] text-red-900 leading-relaxed">
+                      Akun gratis Resend (<code>onboarding@resend.dev</code>) hanya boleh mengirim email ke <strong>email pemilik akun Resend Anda</strong>. Coba masukkan email tersebut atau buka panduan konfigurasi.
+                    </p>
+                    {onOpenSupabaseModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenSupabaseModal('resend');
+                          setErrorMsg(null);
+                        }}
+                        className="inline-flex items-center gap-1 bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">settings</span>
+                        <span>Buka Pengaturan Resend SMTP</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

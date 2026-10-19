@@ -761,9 +761,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <span className="material-symbols-outlined text-rose-600 text-[20px] shrink-0 mt-0.5">
                   error
                 </span>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="font-bold">Gagal Diproses</p>
-                  <p className="mt-0.5 leading-relaxed">{errorMsg}</p>
+                  <p className="mt-0.5 leading-relaxed whitespace-pre-line">{errorMsg}</p>
                   {errorMsg.toLowerCase().includes('sudah terdaftar') && (
                     <button
                       type="button"
@@ -786,6 +786,48 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     >
                       {resending ? 'Mengirim ulang...' : 'Kirim Ulang Email Konfirmasi'}
                     </button>
+                  )}
+                  {(errorMsg.toLowerCase().includes('recovery email') || errorMsg.toLowerCase().includes('resend')) && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-white/90 border border-rose-200/90 text-xs space-y-2.5">
+                      <p className="font-bold text-rose-950 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px] text-amber-600">lightbulb</span>
+                        <span>Langkah Cepat Menyelesaikan Masalah Resend / SMTP:</span>
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-rose-900 text-[11px] leading-relaxed">
+                        <li>
+                          <strong>Uji Coba Cepat (Akun Gratis Resend):</strong> Masukkan <em>alamat email akun Resend Anda sendiri</em> di form lupa sandi, karena domain uji coba <code>onboarding@resend.dev</code> hanya diizinkan mengirim ke email pemilik akun.
+                        </li>
+                        <li>
+                          <strong>Periksa SMTP Supabase:</strong> Host: <code>smtp.resend.com</code>, Port: <code>465</code>, User: <code>resend</code> (huruf kecil semua, bukan email!), Password: API Key Resend (<code>re_...</code>).
+                        </li>
+                        <li>
+                          <strong>Kirim ke Semua Email:</strong> Verifikasi domain Anda di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a> lalu ubah Sender Email menjadi domain Anda.
+                        </li>
+                      </ul>
+                      <div className="pt-1 flex flex-wrap items-center gap-2">
+                        {onOpenSupabaseModal && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenSupabaseModal('resend')}
+                            className="inline-flex items-center gap-1.5 bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer transition-colors shadow-xs"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">settings</span>
+                            <span>Buka Panduan &amp; Salin SMTP Resend</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDirectOtpMode(true);
+                            setErrorMsg(null);
+                          }}
+                          className="inline-flex items-center gap-1 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">pin</span>
+                          <span>Beralih ke Input 6-Digit OTP</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
                 <button

@@ -408,6 +408,32 @@ Link Supabase Dashboard: ${supabaseSmtpSettingsUrl}`;
               </div>
             </div>
 
+            {/* Peringatan Kritis: Batasan Akun Resend Gratis & Solusi Error Sending Recovery Email */}
+            <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 text-xs space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-amber-700 text-[22px] shrink-0 mt-0.5">
+                  help_outline
+                </span>
+                <div className="space-y-1.5 min-w-0">
+                  <h4 className="font-bold text-amber-950 text-xs sm:text-sm">
+                    Penting: Mengapa Muncul "Error sending recovery email"?
+                  </h4>
+                  <p className="text-[11px] sm:text-xs text-amber-900 leading-relaxed">
+                    Jika Anda menggunakan <code>onboarding@resend.dev</code> sebagai Sender Email, Resend menerapkan batasan uji coba ketat: <strong>HANYA dapat mengirim ke alamat email yang Anda gunakan mendaftar di Resend</strong>. Jika mencoba mengirim ke email lain, Resend akan memblokirnya dan Supabase memunculkan <em>"Error sending recovery email"</em>.
+                  </p>
+                  <div className="p-2.5 bg-white/80 rounded-xl border border-amber-200 text-[11px] space-y-1">
+                    <p className="font-bold text-amber-950">2 Pilihan Solusi:</p>
+                    <p className="text-amber-900">
+                      1. <strong>Uji Coba Cepat:</strong> Masukkan email akun Resend Anda saat menguji Lupa Kata Sandi di portal.
+                    </p>
+                    <p className="text-amber-900">
+                      2. <strong>Kirim Bebas ke Semua Email (Produksi):</strong> Daftarkan domain Anda di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a> (tambahkan DNS record DKIM &amp; SPF), lalu ganti Sender Email di bawah &amp; di Supabase menjadi domain Anda (misal: <code>noreply@asetrumahbatam.com</code>).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Input Resend API Key */}
             <div className="bg-[#f8faff] rounded-2xl p-4 sm:p-5 border border-[#e2e8f0] space-y-3.5">
               <div className="flex items-center justify-between">
@@ -689,8 +715,9 @@ Link Supabase Dashboard: ${supabaseSmtpSettingsUrl}`;
                 {/* Field 3: User */}
                 <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-gray-400 block">User</span>
+                    <span className="text-[10px] uppercase font-bold text-gray-400 block">User (Wajib: resend)</span>
                     <span className="font-mono font-bold text-[#0e1c2f]">{DEFAULT_RESEND_SMTP_USER}</span>
+                    <span className="text-[9px] text-gray-500 block">Ketik huruf kecil 'resend', bukan email!</span>
                   </div>
                   <button
                     type="button"
@@ -730,6 +757,7 @@ Link Supabase Dashboard: ${supabaseSmtpSettingsUrl}`;
                   <div>
                     <span className="text-[10px] uppercase font-bold text-gray-400 block">Sender Email</span>
                     <span className="font-mono font-bold text-[#0e1c2f]">{resendFromEmail || DEFAULT_RESEND_FROM_EMAIL}</span>
+                    <span className="text-[9px] text-gray-500 block">onboarding@resend.dev (Testing) atau domain Anda</span>
                   </div>
                   <button
                     type="button"
