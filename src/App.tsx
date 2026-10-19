@@ -22,6 +22,7 @@ import { TentangKamiPage } from './pages/TentangKamiPage';
 import { TitipPropertiPage } from './pages/TitipPropertiPage';
 import { FaqPage } from './pages/FaqPage';
 import { DashboardUserPage } from './pages/DashboardUserPage';
+import { LoginPage } from './pages/LoginPage';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('beranda');
@@ -111,6 +112,7 @@ export default function App() {
       'titip-properti': 'Titip Jual & Sewa Properti Batam | Aset Rumah Batam',
       'faq-bantuan': 'Pusat FAQ & Bantuan Legal Properti Batam',
       'dashboard-user': 'Dashboard Pengguna & Properti Favorit | Aset Rumah Batam',
+      'login': 'Masuk & Daftar Akun Agent | Aset Rumah Batam',
     };
     document.title = titles[page] || 'Aset Rumah Batam';
   };
@@ -169,7 +171,7 @@ export default function App() {
         currentPage={currentPage}
         onNavigate={handleNavigate}
         user={currentUser}
-        onOpenAuth={() => setShowAuthModal(true)}
+        onOpenAuth={() => handleNavigate('login')}
         onLogout={handleLogout}
       />
 
@@ -246,7 +248,7 @@ export default function App() {
 
                 <div className="mt-8 space-y-3">
                   <button
-                    onClick={() => setShowAuthModal(true)}
+                    onClick={() => handleNavigate('login')}
                     className="w-full py-3 px-6 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-[18px]">login</span>
@@ -274,6 +276,19 @@ export default function App() {
               </div>
             </div>
           )
+        )}
+
+        {currentPage === 'login' && (
+          <LoginPage
+            onNavigate={handleNavigate}
+            currentUser={currentUser}
+            onLoginSuccess={(user) => {
+              setCurrentUser(user);
+              handleNavigate('dashboard-user');
+            }}
+            onLogout={handleLogout}
+            onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+          />
         )}
       </main>
 

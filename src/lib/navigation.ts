@@ -12,6 +12,7 @@ export const PAGE_PATHS: Record<PageId, string> = {
   'titip-properti': '/titip-properti',
   'faq-bantuan': '/faq-bantuan',
   'dashboard-user': '/dashboard',
+  'login': '/login',
 };
 
 /**
@@ -147,7 +148,19 @@ export function parseInitialRoute(properties: PropertyItem[] = PROPERTIES_LIST):
     }
   }
 
-  // 4. Match top-level page paths
+  // 4. Special aliases for login & registration
+  if (
+    pathname === '/login' || 
+    pathname === '/masuk' || 
+    pathname === '/daftar' || 
+    pathname.startsWith('/login/') || 
+    pathname.startsWith('/masuk/') || 
+    pathname.startsWith('/daftar/')
+  ) {
+    return { page: 'login' };
+  }
+
+  // 5. Match top-level page paths
   for (const [pageId, path] of Object.entries(PAGE_PATHS)) {
     if (path !== '/' && (pathname === path || pathname.startsWith(path + '/'))) {
       return { page: pageId as PageId };

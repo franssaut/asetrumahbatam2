@@ -7,7 +7,8 @@ export type PageId =
   | 'tentang-kami'
   | 'titip-properti'
   | 'faq-bantuan'
-  | 'dashboard-user';
+  | 'dashboard-user'
+  | 'login';
 
 export interface UserProfile {
   id: string;
