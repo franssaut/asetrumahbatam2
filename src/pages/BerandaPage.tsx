@@ -5,16 +5,24 @@ import { getPropertyPath, copyPropertyLinkToClipboard } from '../lib/navigation'
 import { ShareListingModal } from '../components/ShareListingModal';
 
 interface BerandaPageProps {
+  properties?: PropertyItem[];
   onNavigate: (page: PageId) => void;
   onSelectProperty: (property: PropertyItem) => void;
 }
 
-export const BerandaPage: React.FC<BerandaPageProps> = ({ onNavigate, onSelectProperty }) => {
+export const BerandaPage: React.FC<BerandaPageProps> = ({ 
+  properties: propsList,
+  onNavigate, 
+  onSelectProperty 
+}) => {
   const [selectedDistrict, setSelectedDistrict] = useState('Semua Kawasan');
   const [selectedCategory, setSelectedCategory] = useState('Semua Tipe');
   const [searchKeywords, setSearchKeywords] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [shareModalProperty, setShareModalProperty] = useState<PropertyItem | null>(null);
+
+  const activeProperties = propsList && propsList.length > 0 ? propsList : PROPERTIES_LIST;
+  const featuredProperties = activeProperties.slice(0, 4);
 
   const handleCopyCardLink = async (e: React.MouseEvent, propId: string) => {
     e.stopPropagation();
@@ -29,9 +37,6 @@ export const BerandaPage: React.FC<BerandaPageProps> = ({ onNavigate, onSelectPr
     e.stopPropagation();
     setShareModalProperty(prop);
   };
-
-  const featuredProperties = PROPERTIES_LIST.slice(0, 4);
-
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     onNavigate('katalog-properti');
@@ -167,113 +172,143 @@ export const BerandaPage: React.FC<BerandaPageProps> = ({ onNavigate, onSelectPr
 
           {/* Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredProperties.map((prop) => (
-              <div
-                key={prop.id}
-                onClick={() => onSelectProperty(prop)}
-                className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-[#e5eeff] flex flex-col justify-between group cursor-pointer"
-              >
-                <div className="relative aspect-[16/11] overflow-hidden bg-slate-100">
-                  <img
-                    src={prop.imageUrl}
-                    alt={prop.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute top-3 left-3 bg-[#0e1c2f]/85 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full">
-                    {prop.category}
-                  </div>
+            {featuredProperties.map((prop) => {
+              const propertyHref = getPropertyPath(prop.id);
 
-                  {/* Action Badges: Copy Link & Share */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={(e) => handleCopyCardLink(e, prop.id)}
-                      className={`p-1.5 rounded-full backdrop-blur-md transition-all shadow-xs cursor-pointer ${
-                        copiedId === prop.id
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-white/90 text-[#0e1c2f] hover:bg-white hover:text-[#0051d5]'
-                      }`}
-                      title={copiedId === prop.id ? 'Tersalin!' : 'Salin tautan listing ini'}
-                    >
-                      <span className="material-symbols-outlined text-[15px] block">
-                        {copiedId === prop.id ? 'check' : 'link'}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenShare(e, prop)}
-                      className="p-1.5 rounded-full bg-white/90 backdrop-blur-md text-[#0e1c2f] hover:bg-white hover:text-[#0051d5] transition-all shadow-xs cursor-pointer"
-                      title="Bagikan listing ke WA / medsos"
-                    >
-                      <span className="material-symbols-outlined text-[15px] block">share</span>
-                    </button>
-
-                    <span className="bg-emerald-600/90 backdrop-blur-md text-white text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[12px]">verified</span>
-                      <span>UWTO OK</span>
-                    </span>
-                  </div>
-
-                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                    <span className="bg-white/95 backdrop-blur-md text-[#0e1c2f] text-[14px] font-extrabold px-3 py-1 rounded-full shadow-xs">
-                      {prop.priceFormatted} {prop.period || ''}
-                    </span>
-                    <span className="bg-[#0e1c2f]/80 backdrop-blur-md text-white/90 font-mono text-[10px] px-2 py-0.5 rounded-md">
-                      /properti/{prop.id}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div className="space-y-1.5">
-                    <h3 className="text-[16px] font-bold text-[#0e1c2f] line-clamp-1 group-hover:text-[#0051d5] transition-colors">
-                      {prop.title}
-                    </h3>
-                    <p className="text-[12px] text-[#75777d] flex items-center gap-1 line-clamp-1">
-                      <span className="material-symbols-outlined text-[14px] text-[#0051d5]">location_on</span>
-                      {prop.location}
-                    </p>
-
-                    <div className="pt-2 grid grid-cols-3 gap-2 text-[12px] text-[#44474c] border-t border-[#eff4ff]">
-                      <div>
-                        <span className="text-[#75777d] block text-[10px] uppercase">Tanah</span>
-                        <span className="font-semibold">{prop.landArea} m²</span>
-                      </div>
-                      <div>
-                        <span className="text-[#75777d] block text-[10px] uppercase">Bangunan</span>
-                        <span className="font-semibold">{prop.buildingArea} m²</span>
-                      </div>
-                      <div>
-                        <span className="text-[#75777d] block text-[10px] uppercase">UWTO</span>
-                        <span className="font-semibold text-[#0051d5]">s/d {prop.uwtoExpiryYear}</span>
-                      </div>
+              return (
+                <div
+                  key={prop.id}
+                  className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-[#e5eeff] flex flex-col justify-between group"
+                >
+                  {/* Clickable Image Hyperlink */}
+                  <a
+                    href={propertyHref}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onSelectProperty(prop);
+                    }}
+                    className="relative aspect-[16/11] overflow-hidden bg-slate-100 block cursor-pointer"
+                    title={`Buka detail ${prop.title}`}
+                  >
+                    <img
+                      src={prop.imageUrl}
+                      alt={prop.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute top-3 left-3 bg-[#0e1c2f]/85 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full">
+                      {prop.category}
                     </div>
-                  </div>
 
-                  <div className="pt-3 border-t border-[#eff4ff] flex items-center justify-between text-[12px]">
-                    <span className="text-[#75777d]">Konsultan: <strong className="text-[#0e1c2f]">{prop.agentName}</strong></span>
-                    <div className="flex items-center gap-1.5">
+                    {/* Action Badges: Copy Link & Share */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={(e) => handleCopyCardLink(e, prop.id)}
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                        className={`p-1.5 rounded-full backdrop-blur-md transition-all shadow-xs cursor-pointer ${
                           copiedId === prop.id
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : 'bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] border-transparent'
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-white/90 text-[#0e1c2f] hover:bg-white hover:text-[#0051d5]'
                         }`}
-                        title="Salin Link Halaman Listing"
+                        title={copiedId === prop.id ? 'Tersalin!' : 'Salin tautan listing ini'}
                       >
-                        {copiedId === prop.id ? '✓ Tersalin' : 'Salin Link'}
+                        <span className="material-symbols-outlined text-[15px] block">
+                          {copiedId === prop.id ? 'check' : 'link'}
+                        </span>
                       </button>
-                      <span className="text-[#0051d5] font-bold group-hover:translate-x-0.5 transition-transform inline-flex items-center">
-                        Detail →
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenShare(e, prop)}
+                        className="p-1.5 rounded-full bg-white/90 backdrop-blur-md text-[#0e1c2f] hover:bg-white hover:text-[#0051d5] transition-all shadow-xs cursor-pointer"
+                        title="Bagikan listing ke WA / medsos"
+                      >
+                        <span className="material-symbols-outlined text-[15px] block">share</span>
+                      </button>
+
+                      <span className="bg-emerald-600/90 backdrop-blur-md text-white text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">verified</span>
+                        <span>UWTO OK</span>
                       </span>
+                    </div>
+
+                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                      <span className="bg-white/95 backdrop-blur-md text-[#0e1c2f] text-[14px] font-extrabold px-3 py-1 rounded-full shadow-xs">
+                        {prop.priceFormatted} {prop.period || ''}
+                      </span>
+                      <span className="bg-[#0e1c2f]/85 backdrop-blur-md text-white/90 font-mono text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[11px]">link</span>
+                        <span>/properti/{prop.id}</span>
+                      </span>
+                    </div>
+                  </a>
+
+                  {/* Card Content & Title Hyperlink */}
+                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-1.5">
+                      <a
+                        href={propertyHref}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onSelectProperty(prop);
+                        }}
+                        className="text-[16px] font-bold text-[#0e1c2f] line-clamp-1 hover:text-[#0051d5] transition-colors block cursor-pointer"
+                        title={prop.title}
+                      >
+                        {prop.title}
+                      </a>
+                      <p className="text-[12px] text-[#75777d] flex items-center gap-1 line-clamp-1">
+                        <span className="material-symbols-outlined text-[14px] text-[#0051d5]">location_on</span>
+                        {prop.location}
+                      </p>
+
+                      <div className="pt-2 grid grid-cols-3 gap-2 text-[12px] text-[#44474c] border-t border-[#eff4ff]">
+                        <div>
+                          <span className="text-[#75777d] block text-[10px] uppercase">Tanah</span>
+                          <span className="font-semibold">{prop.landArea} m²</span>
+                        </div>
+                        <div>
+                          <span className="text-[#75777d] block text-[10px] uppercase">Bangunan</span>
+                          <span className="font-semibold">{prop.buildingArea} m²</span>
+                        </div>
+                        <div>
+                          <span className="text-[#75777d] block text-[10px] uppercase">UWTO</span>
+                          <span className="font-semibold text-[#0051d5]">s/d {prop.uwtoExpiryYear}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Bar with Hyperlinks */}
+                    <div className="pt-3 border-t border-[#eff4ff] flex items-center justify-between text-[12px]">
+                      <span className="text-[#75777d]">Konsultan: <strong className="text-[#0e1c2f]">{prop.agentName}</strong></span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => handleCopyCardLink(e, prop.id)}
+                          className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                            copiedId === prop.id
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : 'bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] border-transparent'
+                          }`}
+                          title="Salin Link Halaman Listing"
+                        >
+                          {copiedId === prop.id ? '✓ Tersalin' : 'Salin Link'}
+                        </button>
+                        <a
+                          href={propertyHref}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onSelectProperty(prop);
+                          }}
+                          className="text-[#0051d5] hover:text-[#0e1c2f] font-bold group-hover:translate-x-0.5 transition-all inline-flex items-center cursor-pointer"
+                        >
+                          Detail →
+                        </a>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Share Modal for Featured Cards */}

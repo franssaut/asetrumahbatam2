@@ -425,6 +425,19 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
                 </button>
               </div>
 
+              {/* Clickable Hyperlink Preview */}
+              <div className="flex items-center gap-1 text-[11px] text-[#75777d]">
+                <span className="material-symbols-outlined text-[14px] text-[#0051d5]">open_in_new</span>
+                <span>Hyperlink:</span>
+                <a
+                  href={canonicalPath}
+                  className="text-[#0051d5] hover:underline font-mono truncate"
+                  title="Klik untuk membuka tautan ini"
+                >
+                  {absoluteUrl}
+                </a>
+              </div>
+
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <a
                   href={waShareUrl}

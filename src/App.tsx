@@ -4,6 +4,7 @@ import { PROPERTIES_LIST, BRAND_ASSETS } from './data/mockData';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { SupabaseModal } from './components/SupabaseModal';
+import { fetchProperties } from './lib/supabase';
 import { 
   parseInitialRoute, 
   getPropertyPath, 
@@ -21,28 +22,59 @@ import { FaqPage } from './pages/FaqPage';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<PageId>('beranda');
+  const [properties, setProperties] = useState<PropertyItem[]>(PROPERTIES_LIST);
   const [selectedProperty, setSelectedProperty] = useState<PropertyItem>(PROPERTIES_LIST[0]);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [loadingProperties, setLoadingProperties] = useState(true);
 
-  // Parse initial route on load and handle browser back/forward buttons
+  // Load properties from Supabase & synchronize route
   useEffect(() => {
-    const handleRouteSync = () => {
-      const route = parseInitialRoute(PROPERTIES_LIST);
-      setCurrentPage(route.page);
-      if (route.property) {
-        setSelectedProperty(route.property);
-        document.title = `${route.property.title} | Aset Rumah Batam`;
-      } else {
-        updatePageTitle(route.page);
-      }
-    };
+    let isMounted = true;
 
-    // Run on initial page mount
-    handleRouteSync();
+    async function initializeData() {
+      try {
+        const liveProperties = await fetchProperties();
+        if (!isMounted) return;
+        setProperties(liveProperties);
+        setLoadingProperties(false);
+
+        // Resolve current route based on live Supabase properties
+        const route = parseInitialRoute(liveProperties);
+        setCurrentPage(route.page);
+        if (route.property) {
+          setSelectedProperty(route.property);
+          document.title = `${route.property.title} | Aset Rumah Batam`;
+        } else {
+          updatePageTitle(route.page);
+        }
+      } catch (e) {
+        console.warn('Error loading initial Supabase properties:', e);
+        if (isMounted) setLoadingProperties(false);
+      }
+    }
+
+    initializeData();
 
     // Listen to browser navigation (back / forward)
-    window.addEventListener('popstate', handleRouteSync);
-    return () => window.removeEventListener('popstate', handleRouteSync);
+    const handlePopState = () => {
+      setProperties((currentProps) => {
+        const route = parseInitialRoute(currentProps);
+        setCurrentPage(route.page);
+        if (route.property) {
+          setSelectedProperty(route.property);
+          document.title = `${route.property.title} | Aset Rumah Batam`;
+        } else {
+          updatePageTitle(route.page);
+        }
+        return currentProps;
+      });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   const updatePageTitle = (page: PageId) => {
@@ -89,13 +121,18 @@ export default function App() {
       <main className="w-full pt-20 bg-[#f8f9ff] flex-1">
         {currentPage === 'beranda' && (
           <BerandaPage
+            properties={properties}
             onNavigate={handleNavigate}
             onSelectProperty={handleSelectProperty}
           />
         )}
 
         {currentPage === 'katalog-properti' && (
-          <KatalogPropertiPage onSelectProperty={handleSelectProperty} />
+          <KatalogPropertiPage 
+            properties={properties}
+            loading={loadingProperties}
+            onSelectProperty={handleSelectProperty} 
+          />
         )}
 
         {currentPage === 'detail-properti' && (

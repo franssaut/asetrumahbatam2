@@ -134,11 +134,13 @@ export function parseInitialRoute(properties: PropertyItem[] = PROPERTIES_LIST):
     }
   }
 
-  // If a property ID was matched, find the corresponding property
+  // If a property ID was matched, find the corresponding property (by ID or title slug)
   if (targetPropertyId) {
-    const matched = properties.find(
-      (p) => p.id.toLowerCase() === targetPropertyId!.toLowerCase()
-    );
+    const cleanTarget = targetPropertyId.toLowerCase();
+    const matched = properties.find((p) => {
+      const slug = p.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      return p.id.toLowerCase() === cleanTarget || slug === cleanTarget;
+    });
     if (matched) {
       return { page: 'detail-properti', property: matched };
     }

@@ -225,17 +225,97 @@ export async function subscribeNewsletter(email: string) {
 /**
  * Fetch Properties from Supabase or fallback
  */
+function formatPriceRupiah(num: number): string {
+  if (num >= 1000000000) {
+    return 'Rp ' + (num / 1000000000).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' Miliar';
+  } else if (num >= 1000000) {
+    return 'Rp ' + (num / 1000000).toLocaleString('id-ID', { maximumFractionDigits: 0 }) + ' Juta';
+  }
+  return 'Rp ' + num.toLocaleString('id-ID');
+}
+
+function mapSupabasePropertyRow(row: any): PropertyItem {
+  const typeMap: Record<string, PropertyItem['category']> = {
+    'Rumah': 'Rumah Mewah',
+    'Rumah Mewah': 'Rumah Mewah',
+    'Townhouse': 'Rumah Mewah',
+    'Komersial': 'Ruko Komersial',
+    'Ruko': 'Ruko Komersial',
+    'Ruko Komersial': 'Ruko Komersial',
+    'Apartemen': 'Apartemen',
+    'Tanah': 'Tanah Kavling',
+    'Tanah Kavling': 'Tanah Kavling',
+    'Villa': 'Villa Waterfront',
+    'Villa Waterfront': 'Villa Waterfront',
+    'Gudang': 'Gudang Industri',
+    'Gudang Industri': 'Gudang Industri',
+  };
+
+  const rawType = String(row.type || row.category || 'Rumah Mewah');
+  const category = typeMap[rawType] || 'Rumah Mewah';
+
+  let district = 'Batam Center';
+  const loc = (row.location || '').toLowerCase();
+  if (loc.includes('sukajadi')) district = 'Sukajadi';
+  else if (loc.includes('nongsa')) district = 'Nongsa';
+  else if (loc.includes('nagoya') || loc.includes('jodoh') || loc.includes('lubuk baja')) district = 'Nagoya / Lubuk Baja';
+  else if (loc.includes('kabil') || loc.includes('punggur')) district = 'Kabil / Punggur';
+  else if (loc.includes('tiban') || loc.includes('sekupang')) district = 'Sekupang / Tiban';
+  else if (loc.includes('batam centre') || loc.includes('batam center')) district = 'Batam Center';
+
+  const rawPrice = Number(row.price) || 0;
+  const id = String(row.id || '').trim();
+
+  return {
+    id: id,
+    title: row.title || 'Properti Batam',
+    category: category,
+    location: row.location || 'Batam, Kepulauan Riau',
+    district: district,
+    price: rawPrice,
+    priceFormatted: formatPriceRupiah(rawPrice),
+    intent: (row.intent === 'sewa' ? 'sewa' : 'jual') as 'jual' | 'sewa',
+    period: row.period || (row.intent === 'sewa' ? '/ tahun' : undefined),
+    landArea: Number(row.area || row.landArea || row.land_area || 120),
+    buildingArea: Number(row.buildingArea || row.building_area || row.area || 100),
+    bedrooms: row.beds !== undefined && row.beds !== null ? Number(row.beds) : (row.bedrooms !== undefined ? Number(row.bedrooms) : 3),
+    bathrooms: row.baths !== undefined && row.baths !== null ? Number(row.baths) : (row.bathrooms !== undefined ? Number(row.bathrooms) : 2),
+    uwtoExpiryYear: Number(row.uwtoExpiryYear || row.uwto_expiry_year || 2048),
+    uwtoStatus: row.uwtoStatus || row.uwto_status || 'Aktif s/d 2048 (LMS BP Batam Valid)',
+    legalStatus: row.legalStatus || row.legal_status || 'Sertifikat HGB Murni (BPN)',
+    imageUrl: row.image_url || row.imageUrl || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+    additionalImages: row.additional_images || row.additionalImages || [],
+    featured: Boolean(row.featured),
+    agentName: row.agent_name || row.agentName || 'Hendry Tan',
+    agentPhone: row.agent_phone || row.agentPhone || '+62 823-9105-9216',
+    agentRole: row.agent_role || row.agentRole || 'Konsultan Properti Batam',
+    description: row.description || `Properti prestisius dengan sertifikasi legalitas resmi BP Batam, berlokasi sangat strategis di kawasan ${row.location || 'Batam'}.`,
+    facilities: row.facilities || ['Verifikasi Faktur UWTO Clear', 'Jalan Aspal Row Lebar', 'Keamanan 24 Jam', 'Air SPAM & Listrik PLN Stabil'],
+  };
+}
+
+/**
+ * Fetch Properties from Supabase with automatic mapping and fallback
+ */
 export async function fetchProperties(): Promise<PropertyItem[]> {
   const client = getSupabase();
   if (!client) return PROPERTIES_LIST;
 
   try {
-    const { data, error } = await client.from('properties').select('*');
+    const { data, error } = await client.from('properties').select('*').order('id', { ascending: true });
     if (error || !data || data.length === 0) {
       return PROPERTIES_LIST;
     }
-    return data as PropertyItem[];
+
+    const supabaseProperties = data.map(mapSupabasePropertyRow);
+    
+    // Merge: Supabase properties first, followed by default mock units that don't share IDs
+    const existingIds = new Set(supabaseProperties.map((p) => p.id.toLowerCase()));
+    const additionalMocks = PROPERTIES_LIST.filter((p) => !existingIds.has(p.id.toLowerCase()));
+    
+    return [...supabaseProperties, ...additionalMocks];
   } catch (err) {
+    console.warn('Failed to fetch properties from Supabase, falling back to mock data:', err);
     return PROPERTIES_LIST;
   }
 }
