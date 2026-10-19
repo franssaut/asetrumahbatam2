@@ -1356,9 +1356,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         </div>
                       </div>
 
-                      <p className="text-[11px] sm:text-xs text-emerald-800 leading-relaxed font-normal">
-                        Buka kotak masuk atau folder spam email Anda. Anda dapat <strong>memasukkan 6-digit kode OTP langsung di bawah</strong> tanpa perlu mengklik tautan email!
-                      </p>
+                      <div className="text-[11px] sm:text-xs text-emerald-800 leading-relaxed space-y-1.5 font-normal">
+                        <p>
+                          Buka kotak masuk atau folder spam email Anda:
+                        </p>
+                        <ul className="list-disc list-inside space-y-1 text-emerald-950 font-medium">
+                          <li>
+                            <strong>Jika email berisi tautan / tombol:</strong> Cukup <strong>klik tombol "Reset password"</strong> di dalam email Anda untuk langsung membuat kata sandi baru (tidak butuh kode OTP).
+                          </li>
+                          <li>
+                            <strong>Jika email berisi 6-digit angka:</strong> Masukkan kode OTP tersebut pada formulir di bawah ini.
+                          </li>
+                        </ul>
+                      </div>
                     </div>
 
                     {/* FORM UTAMA: VERIFIKASI 6-DIGIT OTP LANGSUNG (BEBAS MASALAH LOCALHOST/REDIRECT) */}
@@ -1370,10 +1380,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           </span>
                           <div>
                             <h4 className="font-bold text-xs sm:text-sm text-[#0e1c2f]">
-                              Cara Paling Cepat: Masukkan 6-Digit Kode OTP
+                              Punya 6-Digit Kode OTP dari Email?
                             </h4>
                             <p className="text-[10px] text-gray-500">
-                              Bekerja langsung di browser ini tanpa perlu klik link email
+                              Masukkan kode OTP jika template email Anda menyertakan 6 angka
                             </p>
                           </div>
                         </div>
@@ -1399,8 +1409,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
                         <div>
                           <label className="block text-xs font-bold text-[#0e1c2f] mb-1 flex items-center justify-between">
-                            <span>6-Digit Kode OTP / Token</span>
-                            <span className="text-[10px] text-gray-400 font-normal">Lihat di email</span>
+                            <span>6-Digit Kode OTP</span>
+                            <span className="text-[10px] text-gray-400 font-normal">Dari email</span>
                           </label>
                           <input
                             type="text"
@@ -1412,6 +1422,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           />
                         </div>
                       </div>
+
+                      <p className="text-[11px] text-gray-500 bg-blue-50/60 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
+                        💡 <strong>Catatan Penting:</strong> Email bawaan Supabase biasanya <strong>hanya berisi tombol tautan</strong> tanpa 6-digit angka. Jika di email Anda hanya ada tombol/link, silakan <strong>klik langsung tombol di email tersebut</strong> atau gunakan menu aktivasi manual di bawah.
+                      </p>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>

@@ -893,9 +893,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <span className="material-symbols-outlined text-emerald-600 text-[20px]">mark_email_read</span>
                       <p className="font-bold text-sm text-emerald-950">Tautan &amp; Kode Pemulihan Terkirim!</p>
                     </div>
-                    <p className="leading-relaxed text-emerald-800 text-[11px]">
-                      Masukkan <strong>6-digit kode OTP dari email</strong> di formulir bawah ini untuk langsung membuat kata sandi baru akun Anda:
-                    </p>
+                    <div className="leading-relaxed text-emerald-950 text-[11px] space-y-1">
+                      <p>Periksa kotak masuk atau folder spam email Anda:</p>
+                      <ul className="list-disc list-inside space-y-0.5 text-emerald-900 font-medium">
+                        <li><strong>Jika berisi tombol:</strong> Klik langsung tombol "Reset password" di email Anda.</li>
+                        <li><strong>Jika berisi kode 6 angka:</strong> Masukkan kode pada form di bawah.</li>
+                      </ul>
+                    </div>
                   </div>
 
                   {/* FORM LANGSUNG: VERIFIKASI 6-DIGIT KODE OTP & GANTI KATA SANDI */}
@@ -903,7 +907,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <div className="flex items-center justify-between pb-1 border-b border-gray-100">
                       <h4 className="font-bold text-xs text-[#0e1c2f] flex items-center gap-1.5">
                         <span className="w-5 h-5 rounded-full bg-[#0051d5] text-white flex items-center justify-center text-[10px]">1</span>
-                        <span>Verifikasi Kode OTP 6-Digit</span>
+                        <span>Verifikasi Kode OTP 6-Digit (Jika Ada)</span>
                       </h4>
                       <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-1.5 py-0.5 rounded">
                         Bebas Redirect
@@ -936,6 +940,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         placeholder="contoh: 482910"
                         className="w-full px-3 py-2 rounded-xl border-2 border-blue-400 bg-blue-50/40 text-[#0e1c2f] font-mono text-base font-black tracking-widest outline-none focus:border-[#0051d5] focus:bg-white transition-all placeholder:text-gray-400 placeholder:font-normal placeholder:tracking-normal placeholder:text-xs"
                       />
+                      <p className="mt-1 text-[10px] text-gray-500">
+                        Email Supabase hanya berisi link/tombol? Cukup klik langsung link di email Anda!
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
