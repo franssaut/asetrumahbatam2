@@ -126,10 +126,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         tabParam === 'reset' || 
         hash.includes('type=recovery') ||
         (hash.includes('access_token=') && (hash.includes('recovery') || hash.includes('type='))) ||
-        params.has('code')
+        params.has('code') ||
+        params.has('otp')
       ) {
+        const emailFromParam = params.get('email');
+        const otpFromParam = params.get('otp');
+        if (emailFromParam) setForgotEmail(emailFromParam);
+        if (otpFromParam) setOtpCode(otpFromParam);
         setActiveTab('reset_password');
-        setSuccessMsg('Sesi pemulihan kata sandi aktif. Silakan masukkan kata sandi baru Anda.');
+        setSuccessMsg('Sesi pemulihan kata sandi aktif! Silakan masukkan kata sandi baru Anda.');
       }
 
       // Listen for Supabase password recovery event

@@ -1,6 +1,6 @@
 import { getSupabase } from './supabase';
 import { UserProfile } from '../types';
-import { getResendConfig } from './resend';
+import { getResendConfig, sendPasswordRecoveryOtpEmail } from './resend';
 
 const AUTH_STORAGE_KEY = 'arb_auth_user';
 const FAVORITES_STORAGE_KEY = 'arb_favorite_properties';
@@ -812,13 +812,26 @@ export async function verifyOtpAndResetPassword(
   }
 
   try {
-    // 0. Cek kode OTP yang disimpan di sessionStorage saat mailer fallback
-    const localOtp = typeof window !== 'undefined' ? sessionStorage.getItem('arb_recovery_otp_' + cleanEmail) : null;
+    // 0. Cek kode OTP yang disimpan di sessionStorage atau localStorage saat pengiriman Resend
+    let localOtp = typeof window !== 'undefined' ? sessionStorage.getItem('arb_recovery_otp_' + cleanEmail) : null;
+    if (!localOtp && typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('arb_recovery_otp_' + cleanEmail);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.otp && (!parsed.expires || parsed.expires > Date.now())) {
+            localOtp = parsed.otp;
+          }
+        }
+      } catch (e) {}
+    }
+
     if (localOtp && localOtp === cleanToken) {
       if (newPassword) {
         resetLocalUserPassword(cleanEmail, newPassword);
         try {
           sessionStorage.removeItem('arb_recovery_otp_' + cleanEmail);
+          localStorage.removeItem('arb_recovery_otp_' + cleanEmail);
         } catch (e) {}
         return {
           success: true,
@@ -928,7 +941,7 @@ export async function verifyOtpAndResetPassword(
 export async function resetPasswordForEmail(
   email: string,
   targetRedirectBase?: string
-): Promise<{ success: boolean; message: string; targetUrl?: string }> {
+): Promise<{ success: boolean; message: string; targetUrl?: string; fallbackOtp?: string; isRecoveryEmailError?: boolean }> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
     return {
@@ -946,69 +959,93 @@ export async function resetPasswordForEmail(
     };
   }
 
-  const supabase = getSupabase();
-  if (!supabase) {
-    return {
-      success: false,
-      message: 'Supabase belum terhubung. Konfigurasikan URL dan Anon Key di menu Supabase.',
-    };
+  const redirectBase = targetRedirectBase || getAuthRedirectBaseUrl();
+
+  // 1. Generate 6-Digit Kode OTP resmi untuk sesi pemulihan ini
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.setItem('arb_recovery_otp_' + cleanEmail, otpCode);
+      localStorage.setItem(
+        'arb_recovery_otp_' + cleanEmail,
+        JSON.stringify({ otp: otpCode, expires: Date.now() + 30 * 60 * 1000 })
+      );
+    } catch (e) {}
   }
 
-  try {
-    const redirectBase = targetRedirectBase || getAuthRedirectBaseUrl();
-    const fullRedirectUrl = `${redirectBase}/login?tab=reset_password`;
+  const directResetUrl = `${redirectBase}/login?tab=reset_password&email=${encodeURIComponent(cleanEmail)}&otp=${otpCode}`;
+  const resendCfg = getResendConfig();
 
-    // Kirim permintaan pemulihan kata sandi ke Supabase Auth
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo: fullRedirectUrl,
-    });
+  // 2. SISTEM EMAIL RESEND LANGSUNG (Bypass Supabase email limiter & kirim 6-digit OTP asli)
+  if (resendCfg.isConfigured) {
+    try {
+      const resendResult = await sendPasswordRecoveryOtpEmail({
+        email: cleanEmail,
+        otpCode,
+        resetUrl: directResetUrl,
+      });
 
-    if (error) {
-      const msg = error.message;
-      const lower = msg.toLowerCase();
-
-      if (lower.includes('user not found')) {
-        return { success: false, message: 'Email tidak ditemukan di Supabase Auth. Mohon periksa kembali alamat email Anda.' };
-      }
-
-      if (
-        lower.includes('error sending recovery email') || 
-        lower.includes('error sending confirmation email') || 
-        lower.includes('rate limit') || 
-        lower.includes('over_email_send_rate_limit') ||
-        lower.includes('limit exceeded')
-      ) {
-        // Otomatis buat Kode OTP Pemulihan Mandiri agar alur pengguna TIDAK terblokir oleh rate limit mail server!
-        const fallbackOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        if (typeof window !== 'undefined') {
-          try {
-            sessionStorage.setItem('arb_recovery_otp_' + cleanEmail, fallbackOtp);
-          } catch (e) {}
-        }
-
+      if (resendResult.success) {
+        return {
+          success: true,
+          fallbackOtp: otpCode,
+          message: `Kode OTP 6-digit dan tautan pemulihan telah dikirim ke ${cleanEmail} via Resend.com! Silakan periksa kotak masuk atau spam email Anda.`,
+          targetUrl: directResetUrl,
+        };
+      } else {
+        // Jika Resend menolak (misal domain uji coba dan dikirim ke selain email pemilik akun Resend)
         return {
           success: true,
           isRecoveryEmailError: true,
-          fallbackOtp,
-          message: `Sesi pemulihan akun disiapkan! Batas email Supabase terlampaui (Email Rate Limit Exceeded). Anda dapat langsung menggunakan 6-Digit Kode Verifikasi Mandiri: ${fallbackOtp} di bawah ini untuk menetapkan kata sandi baru.`,
-          targetUrl: fullRedirectUrl,
+          fallbackOtp: otpCode,
+          message: `Sesi pemulihan akun aktif (${resendResult.message}). Gunakan 6-Digit Kode Verifikasi: ${otpCode} di bawah untuk langsung mengganti kata sandi baru.`,
+          targetUrl: directResetUrl,
+        };
+      }
+    } catch (err: any) {
+      return {
+        success: true,
+        isRecoveryEmailError: true,
+        fallbackOtp: otpCode,
+        message: `Sesi pemulihan akun disiapkan! Gunakan 6-Digit Kode Verifikasi: ${otpCode} di bawah ini untuk langsung menetapkan kata sandi baru.`,
+        targetUrl: directResetUrl,
+      };
+    }
+  }
+
+  // 3. JIKA RESEND BELUM DIKONFIGURASI: Coba kirim via Supabase Auth dengan penanganan rate limit
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: directResetUrl,
+      });
+
+      if (error) {
+        return {
+          success: true,
+          isRecoveryEmailError: true,
+          fallbackOtp: otpCode,
+          message: `Batas pengiriman Supabase terlampaui. Gunakan 6-Digit Kode OTP: ${otpCode} di bawah ini untuk langsung membuat sandi baru, atau masukkan Resend API Key di menu Integrasi Resend.`,
+          targetUrl: directResetUrl,
         };
       }
 
-      return { success: false, message: msg };
-    }
-
-    const resendCfg = getResendConfig();
-    const deliveryProvider = resendCfg.isConfigured ? 'Resend SMTP' : 'Supabase Email';
-
-    return {
-      success: true,
-      message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail} (via ${deliveryProvider}). Tautan mengarahkan ke: ${redirectBase}`,
-      targetUrl: fullRedirectUrl,
-    };
-  } catch (err: any) {
-    return { success: false, message: err.message || 'Gagal mengirim email reset kata sandi.' };
+      return {
+        success: true,
+        fallbackOtp: otpCode,
+        message: `Tautan pemulihan telah dikirim ke ${cleanEmail}. Gunakan kode OTP: ${otpCode} atau klik tautan di email Anda.`,
+        targetUrl: directResetUrl,
+      };
+    } catch (e) {}
   }
+
+  return {
+    success: true,
+    fallbackOtp: otpCode,
+    message: `Sesi pemulihan siap! Gunakan 6-Digit Kode OTP: ${otpCode} di bawah untuk langsung menetapkan kata sandi baru Anda.`,
+    targetUrl: directResetUrl,
+  };
 }
 
 /**

@@ -382,3 +382,150 @@ export const SUPABASE_CONFIRMATION_TEMPLATE_HTML = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+
+/**
+ * Kirim email secara langsung melalui Resend API (via endpoint serverless /api/send-email)
+ * Tidak menggunakan email service bawaan Supabase sehingga bebas rate limit & kendala CORS!
+ */
+export async function sendResendEmail(params: {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+  fromEmail?: string;
+  fromName?: string;
+}): Promise<{ success: boolean; message: string; id?: string }> {
+  const cfg = getResendConfig();
+  const apiKey = cfg.apiKey;
+
+  if (!apiKey || !apiKey.trim().startsWith('re_')) {
+    return {
+      success: false,
+      message: 'API Key Resend belum dikonfigurasi. Masukkan API Key di menu Integrasi Resend.',
+    };
+  }
+
+  const sender = `${params.fromName || cfg.fromName || DEFAULT_RESEND_FROM_NAME} <${params.fromEmail || cfg.fromEmail || DEFAULT_RESEND_FROM_EMAIL}>`;
+
+  try {
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: params.to.trim(),
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+        from: sender,
+        apiKey: apiKey.trim(),
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success && !data.id) {
+      return {
+        success: false,
+        message: data.message || 'Resend menolak pengiriman email.',
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Email berhasil dikirim langsung via Resend.com!',
+      id: data.id,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Gagal menghubungi gateway pengiriman Resend.',
+    };
+  }
+}
+
+/**
+ * Buat dan kirim email OTP Pemulihan Kata Sandi langsung menggunakan Resend.com
+ * Mengirimkan 6-digit kode OTP asli dan tautan instan langsung ke email pengguna.
+ */
+export async function sendPasswordRecoveryOtpEmail({
+  email,
+  otpCode,
+  resetUrl,
+}: {
+  email: string;
+  otpCode: string;
+  resetUrl: string;
+}): Promise<{ success: boolean; message: string; id?: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kode OTP Reset Kata Sandi - Aset Rumah Batam</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f7fb; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1e293b;">
+  <div style="width:100%; background-color:#f4f7fb; padding:40px 12px; box-sizing:border-box;">
+    <div style="max-width:560px; margin:0 auto; background:#ffffff; border-radius:24px; overflow:hidden; box-shadow:0 12px 35px rgba(14,28,47,0.08); border:1px solid #e2e8f0;">
+      <!-- HEADER -->
+      <div style="background:linear-gradient(135deg, #0b1c30 0%, #0051d5 100%); padding:36px 30px; text-align:center; color:#ffffff;">
+        <div style="font-size:36px; margin-bottom:8px;">🏛️</div>
+        <h1 style="font-size:22px; font-weight:800; margin:0; letter-spacing:0.5px; color:#ffffff;">ASET RUMAH BATAM</h1>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:2px; color:#93c5fd; margin-top:6px; font-weight:700;">PEMULIHAN KATA SANDI AKUN</div>
+      </div>
+
+      <!-- BODY -->
+      <div style="padding:36px 32px;">
+        <h2 style="font-size:18px; font-weight:700; color:#0e1c2f; margin-top:0; margin-bottom:12px;">Halo,</h2>
+        <p style="font-size:14px; line-height:1.65; color:#475569; margin-bottom:24px;">
+          Kami menerima permintaan untuk mereset kata sandi akun Anda (<strong>${cleanEmail}</strong>). Silakan gunakan <strong>6-digit kode OTP</strong> atau klik tombol tautan di bawah ini:
+        </p>
+
+        <!-- KOTAK KODE OTP BESAR & JELAS -->
+        <div style="margin:28px 0; padding:24px 20px; background-color:#eff6ff; border:2px dashed #0051d5; border-radius:18px; text-align:center;">
+          <div style="font-size:11px; font-weight:800; color:#0051d5; text-transform:uppercase; letter-spacing:1.5px; margin-bottom:10px;">
+            6-DIGIT KODE OTP RESMI ANDA:
+          </div>
+          <div style="font-size:38px; font-weight:900; font-family:'SF Pro Mono', Menlo, Consolas, Monaco, monospace; letter-spacing:10px; color:#0e1c2f; padding:6px 0;">
+            ${otpCode}
+          </div>
+          <div style="font-size:12px; color:#64748b; margin-top:10px;">
+            Masukkan kode angka ini pada kolom formulir pemulihan di website.
+          </div>
+        </div>
+
+        <!-- TOMBOL LANGSUNG -->
+        <div style="text-align:center; margin:30px 0;">
+          <a href="${resetUrl}" style="display:inline-block; background-color:#0051d5; color:#ffffff !important; text-decoration:none; font-size:14px; font-weight:700; padding:14px 34px; border-radius:12px; box-shadow:0 6px 18px rgba(0,81,213,0.3);">
+            🔒 Atur Kata Sandi Baru Sekarang →
+          </a>
+        </div>
+
+        <div style="background-color:#f8fafc; border-left:4px solid #0051d5; border-radius:8px; padding:14px 18px; margin-top:28px; font-size:12px; color:#64748b; line-height:1.6;">
+          <strong>⚠️ Keamanan Akun:</strong><br>
+          • Kode OTP dan tautan ini berlaku selama <strong>30 menit</strong>.<br>
+          • Jika Anda tidak meminta pemulihan ini, abaikan email ini. Akun Anda tetap aman.
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div style="background-color:#f8fafc; padding:24px 30px; text-align:center; border-top:1px solid #e2e8f0; font-size:11px; color:#94a3b8; line-height:1.6;">
+        <strong>Aset Rumah Batam (ARB)</strong><br>
+        Portal Properti Resmi & Pendampingan Legalitas UWTO Batam<br>
+        <em>Dikirim langsung melalui infrastruktur Resend.com Email Delivery</em>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return sendResendEmail({
+    to: cleanEmail,
+    subject: `Kode OTP Pemulihan Kata Sandi Anda: ${otpCode} - Aset Rumah Batam`,
+    html: htmlContent,
+    text: `Kode OTP pemulihan kata sandi akun Aset Rumah Batam Anda adalah: ${otpCode}. Atau buka tautan berikut: ${resetUrl}`,
+  });
+}
+
