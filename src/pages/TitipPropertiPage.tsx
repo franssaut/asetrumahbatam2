@@ -17,7 +17,7 @@ export const TitipPropertiPage: React.FC = () => {
   const [legalStatus, setLegalStatus] = useState('');
   const [uwtoDuration, setUwtoDuration] = useState('');
   const [notes, setNotes] = useState('');
-  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string }[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const propertyTypes = [
@@ -40,18 +40,33 @@ export const TitipPropertiPage: React.FC = () => {
     setPrice(formatted);
   };
 
+  const processFiles = (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    imageFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setUploadedFiles((prev) => {
+            if (prev.length >= 8) return prev;
+            return [...prev, { name: file.name, url: e.target?.result as string }];
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const names = Array.from(e.dataTransfer.files).map((f) => f.name);
-      setUploadedFiles((prev) => [...prev, ...names].slice(0, 8));
+      processFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const names = Array.from(e.target.files).map((f) => f.name);
-      setUploadedFiles((prev) => [...prev, ...names].slice(0, 8));
+      processFiles(e.target.files);
+      e.target.value = '';
     }
   };
 
@@ -447,26 +462,47 @@ export const TitipPropertiPage: React.FC = () => {
 
                   {/* Uploaded File Previews */}
                   {uploadedFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2 justify-center pt-4">
-                      {uploadedFiles.map((fileName, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center gap-1.5 bg-white border border-[#dbe1ff] px-3 py-1 rounded-full text-[12px] font-medium text-[#0b1c30] shadow-2xs"
-                        >
-                          <span className="material-symbols-outlined text-[15px] text-[#0051d5]">image</span>
-                          <span className="max-w-[140px] truncate">{fileName}</span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeFile(idx);
-                            }}
-                            className="text-[#75777d] hover:text-rose-600 ml-1"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">close</span>
-                          </button>
+                    <div className="pt-4 border-t border-[#dbe1ff]/60 mt-3">
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="text-xs font-bold text-[#0b1c30] flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[15px] text-[#0051d5]">photo_library</span>
+                          {uploadedFiles.length} Foto Terpilih (Maks. 8)
                         </span>
-                      ))}
+                        <span className="text-[11px] text-[#75777d]">Klik tanda silang untuk menghapus</span>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        {uploadedFiles.map((fileObj, idx) => (
+                          <div
+                            key={idx}
+                            className="group relative rounded-xl overflow-hidden bg-white border border-[#dbe1ff] shadow-2xs aspect-[4/3] flex flex-col justify-end"
+                          >
+                            <img
+                              src={fileObj.url}
+                              alt={fileObj.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 flex items-center justify-between">
+                              <span className="text-[10px] text-white truncate max-w-[80%] font-medium">
+                                {fileObj.name}
+                              </span>
+                              <span className="text-[9px] text-white/80 font-bold">
+                                #{idx + 1}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeFile(idx);
+                              }}
+                              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 hover:bg-rose-600 text-white flex items-center justify-center transition-colors shadow-xs cursor-pointer"
+                              title="Hapus foto ini"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">close</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

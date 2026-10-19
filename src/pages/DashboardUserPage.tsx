@@ -100,7 +100,12 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   const [formLegalStatus, setFormLegalStatus] = useState('Sertifikat HGB Murni (BPN)');
   const [formUwtoYear, setFormUwtoYear] = useState<string>('2052');
   const [formUwtoStatus, setFormUwtoStatus] = useState('Aktif s/d 2052 (LMS BP Batam Valid)');
-  const [formImageUrl, setFormImageUrl] = useState('https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80');
+  const [formImages, setFormImages] = useState<string[]>([
+    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+  ]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [customImageUrlInput, setCustomImageUrlInput] = useState('');
+  const [isImageDragOver, setIsImageDragOver] = useState(false);
   const [formDescription, setFormDescription] = useState('');
   const [formFacilities, setFormFacilities] = useState<string[]>([
     'Keamanan 24 Jam & One Gate System',
@@ -429,7 +434,8 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     setFormLegalStatus('Sertifikat HGB Murni (BPN)');
     setFormUwtoYear('2052');
     setFormUwtoStatus('Aktif s/d 2052 (LMS BP Batam Valid)');
-    setFormImageUrl(PRESET_IMAGES[0].url);
+    setFormImages([PRESET_IMAGES[0].url]);
+    setCustomImageUrlInput('');
     setFormDescription('Unit perumahan residensial asri siap huni dengan tata ruang lega, sertifikasi legalitas resmi BPN & BP Batam.');
     setFormFacilities([
       'Keamanan 24 Jam & One Gate System',
@@ -460,7 +466,9 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     setFormLegalStatus(prop.legalStatus);
     setFormUwtoYear(String(prop.uwtoExpiryYear));
     setFormUwtoStatus(prop.uwtoStatus);
-    setFormImageUrl(prop.imageUrl);
+    const existingImages = [prop.imageUrl, ...(prop.additionalImages || [])].filter(Boolean);
+    setFormImages(existingImages.length > 0 ? existingImages : [PRESET_IMAGES[0].url]);
+    setCustomImageUrlInput('');
     setFormDescription(prop.description);
     setFormFacilities(prop.facilities || []);
     setFormStatus(prop.status || 'published');
@@ -474,21 +482,155 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     );
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran file maksimal 5MB');
+  // Helper: kompresi gambar client-side agar upload multi-gambar cepat & hemat memori
+  const compressImage = (file: File, maxDimension = 1400, quality = 0.82): Promise<string> => {
+    return new Promise((resolve) => {
+      if (file.type === 'image/svg+xml') {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve((e.target?.result as string) || '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(file);
         return;
       }
+
       const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setFormImageUrl(event.target.result as string);
-        }
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve((e.target?.result as string) || '');
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve((e.target?.result as string) || '');
+        img.src = (e.target?.result as string) || '';
       };
+      reader.onerror = () => resolve('');
       reader.readAsDataURL(file);
+    });
+  };
+
+  // Multi-upload handler: mendukung banyak file foto sekaligus
+  const handleMultipleImageUpload = async (fileList: FileList | File[]) => {
+    if (!fileList || fileList.length === 0) return;
+    setIsUploadingImages(true);
+    try {
+      const files = Array.from(fileList).filter((f) => f.type.startsWith('image/'));
+      if (files.length === 0) {
+        setToastMessage({
+          type: 'error',
+          text: 'Format file tidak didukung. Harap pilih berkas foto (JPG, PNG, atau WebP).',
+        });
+        return;
+      }
+      const compressedList = await Promise.all(files.map((f) => compressImage(f)));
+      const validCompressed = compressedList.filter(Boolean);
+      if (validCompressed.length > 0) {
+        setFormImages((prev) => {
+          // Gabungkan dengan foto yang sudah ada (maksimal 12 foto)
+          return [...prev, ...validCompressed].slice(0, 12);
+        });
+        setToastMessage({
+          type: 'success',
+          text: `Berhasil menambahkan ${validCompressed.length} foto ke galeri listing!`,
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setToastMessage({
+        type: 'error',
+        text: 'Gagal memproses unggahan foto. Silakan coba kembali.',
+      });
+    } finally {
+      setIsUploadingImages(false);
     }
+  };
+
+  // Jadikan foto terpilih sebagai sampul utama (Cover)
+  const handleSetCoverImage = (index: number) => {
+    if (index === 0) return;
+    setFormImages((prev) => {
+      const selected = prev[index];
+      const rest = prev.filter((_, i) => i !== index);
+      return [selected, ...rest];
+    });
+    setToastMessage({
+      type: 'info',
+      text: 'Foto sampul utama (cover) berhasil diperbarui!',
+    });
+  };
+
+  // Hapus foto dari galeri listing
+  const handleRemoveImage = (index: number) => {
+    setFormImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [PRESET_IMAGES[0].url];
+    });
+  };
+
+  // Geser urutan foto
+  const handleMoveImage = (index: number, direction: 'prev' | 'next') => {
+    setFormImages((prev) => {
+      const nextArr = [...prev];
+      const targetIdx = direction === 'prev' ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= nextArr.length) return prev;
+      const temp = nextArr[index];
+      nextArr[index] = nextArr[targetIdx];
+      nextArr[targetIdx] = temp;
+      return nextArr;
+    });
+  };
+
+  // Tambah URL gambar eksternal
+  const handleAddCustomUrl = () => {
+    const url = customImageUrlInput.trim();
+    if (!url) return;
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/')) {
+      setToastMessage({
+        type: 'error',
+        text: 'URL gambar tidak valid. Harus diawali dengan https://',
+      });
+      return;
+    }
+    setFormImages((prev) => [...prev, url].slice(0, 12));
+    setCustomImageUrlInput('');
+    setToastMessage({
+      type: 'success',
+      text: 'Foto dari URL berhasil ditambahkan ke galeri listing!',
+    });
+  };
+
+  // Tambah foto dari Preset Batam
+  const handleAddPresetImage = (url: string) => {
+    setFormImages((prev) => {
+      if (prev.includes(url)) {
+        // Jika sudah ada, pindahkan ke cover
+        const filtered = prev.filter((u) => u !== url);
+        return [url, ...filtered];
+      }
+      return [...prev, url].slice(0, 12);
+    });
+    setToastMessage({
+      type: 'success',
+      text: 'Foto contoh arsitektur ditambahkan ke galeri listing!',
+    });
   };
 
   const handleSaveListing = async (e: React.FormEvent) => {
@@ -537,7 +679,8 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       uwtoExpiryYear: Number(formUwtoYear) || 2050,
       uwtoStatus: formUwtoStatus || `Aktif s/d ${formUwtoYear} (LMS BP Batam Valid)`,
       legalStatus: formLegalStatus,
-      imageUrl: formImageUrl || PRESET_IMAGES[0].url,
+      imageUrl: formImages[0] || PRESET_IMAGES[0].url,
+      additionalImages: formImages.slice(1),
       description: formDescription.trim() || `Properti prestisius dengan sertifikasi legalitas resmi BP Batam, berlokasi sangat strategis di kawasan ${formDistrict}.`,
       facilities: formFacilities.length > 0 ? formFacilities : ['Keamanan 24 Jam', 'Air SPAM & PLN Stabil'],
       status: formStatus,
@@ -1555,6 +1698,12 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                               <span className="absolute top-2.5 right-2.5 text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-blue-600 text-white uppercase shadow-xs">
                                 {prop.intent || 'jual'}
                               </span>
+                              {prop.additionalImages && prop.additionalImages.length > 0 && (
+                                <span className="absolute bottom-2.5 right-2.5 text-[10px] font-bold px-2 py-0.5 rounded-md bg-black/75 text-white backdrop-blur-md flex items-center gap-1 shadow-xs">
+                                  <span className="material-symbols-outlined text-[13px]">photo_library</span>
+                                  {1 + prop.additionalImages.length} Foto
+                                </span>
+                              )}
                             </div>
 
                             {/* Card Body */}
@@ -2720,86 +2869,271 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 </div>
               </div>
 
-              {/* Section 4: Foto Properti (Unggah Fleksibel) */}
-              <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-[#0e1c2f] flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[#0051d5] text-[18px]">photo_camera</span>
-                    Foto Properti Utama
-                  </label>
-                  <span className="text-[10px] text-gray-500">File upload / Preset pilihan</span>
+              {/* Section 4: Galeri Foto Properti (Multi-Upload) */}
+              <div className="p-4 rounded-2xl bg-gray-50 border border-gray-100 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200/70 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#0051d5] text-[22px]">photo_library</span>
+                    <div>
+                      <h4 className="font-bold text-sm text-[#0e1c2f]">Galeri Foto Properti (Multi-Upload)</h4>
+                      <p className="text-[11px] text-gray-500">
+                        Unggah banyak foto sekaligus. Foto pertama otomatis menjadi <strong>Sampul Utama (Cover)</strong>.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shadow-2xs">
+                      <span className="material-symbols-outlined text-[15px]">photo_camera</span>
+                      {formImages.length} Foto Siap Tayang
+                    </span>
+                    {formImages.length < 12 && (
+                      <span className="text-[11px] text-gray-400 font-medium">(Maks. 12 Foto)</span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 items-center">
-                  {/* Photo Preview */}
-                  <div className="w-full sm:w-48 aspect-video rounded-xl overflow-hidden bg-gray-200 relative shrink-0 shadow-xs border border-gray-200">
-                    <img
-                      src={formImageUrl}
-                      alt="Pratinjau"
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded font-mono">
-                      Preview
+                {/* Dropzone Multi-Upload Berkas */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsImageDragOver(true);
+                  }}
+                  onDragLeave={() => setIsImageDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsImageDragOver(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      handleMultipleImageUpload(e.dataTransfer.files);
+                    }
+                  }}
+                  className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+                    isImageDragOver
+                      ? 'border-[#0051d5] bg-blue-50/80 scale-[1.01]'
+                      : 'border-gray-300 bg-white hover:border-[#0051d5] hover:bg-blue-50/30'
+                  }`}
+                >
+                  <input
+                    id="multi-listing-images-input"
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleMultipleImageUpload(e.target.files);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="hidden"
+                  />
+
+                  {isUploadingImages ? (
+                    <div className="py-4 flex flex-col items-center justify-center gap-2">
+                      <span className="w-8 h-8 border-3 border-[#0051d5]/30 border-t-[#0051d5] rounded-full animate-spin"></span>
+                      <p className="text-xs font-bold text-[#0051d5]">Sedang Mengompresi & Memproses Foto...</p>
+                      <p className="text-[11px] text-gray-500">Menyesuaikan resolusi agar cepat dimuat di portal</p>
+                    </div>
+                  ) : (
+                    <label htmlFor="multi-listing-images-input" className="cursor-pointer block space-y-2">
+                      <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-[#0051d5] mx-auto shadow-2xs group-hover:scale-110 transition-transform">
+                        <span className="material-symbols-outlined text-[28px]">add_photo_alternate</span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-[#0e1c2f] hover:text-[#0051d5]">
+                          Klik untuk Pilih Banyak Berkas Foto atau Seret & Lepas ke Sini
+                        </p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          Dapat memilih lebih dari 1 file foto sekaligus (JPG, PNG, WebP). Kompresi otomatis & bebas kuota.
+                        </p>
+                      </div>
+                      <div className="pt-1">
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#0051d5] text-white text-xs font-bold shadow-xs hover:bg-[#316bf3] transition-colors">
+                          <span className="material-symbols-outlined text-[16px]">upload_file</span>
+                          + Pilih Banyak Foto dari Perangkat
+                        </span>
+                      </div>
+                    </label>
+                  )}
+                </div>
+
+                {/* Visual Grid Thumbnail Foto Terpilih */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#0e1c2f] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[#0051d5] text-[16px]">grid_view</span>
+                      Pratinjau Galeri Foto ({formImages.length})
+                    </span>
+                    <span className="text-[11px] text-gray-500">
+                      Gunakan tombol ⭐ untuk mengganti foto sampul utama
                     </span>
                   </div>
 
-                  {/* Upload File Input & Custom URL */}
-                  <div className="flex-1 w-full space-y-2">
-                    <div>
-                      <span className="text-[11px] font-semibold text-gray-700 block mb-1">
-                        1. Unggah File Foto dari Perangkat:
-                      </span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageFileUpload}
-                        className="w-full text-xs text-gray-500 file:mr-2.5 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#0051d5] file:text-white hover:file:bg-[#316bf3] file:cursor-pointer cursor-pointer"
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {formImages.map((imgUrl, idx) => {
+                      const isCover = idx === 0;
 
-                    <div>
-                      <span className="text-[11px] font-semibold text-gray-700 block mb-1">
-                        2. Atau Masukkan URL Gambar:
-                      </span>
-                      <input
-                        type="url"
-                        value={formImageUrl}
-                        onChange={(e) => setFormImageUrl(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full p-2 rounded-xl bg-white border border-gray-200 text-xs"
-                      />
-                    </div>
+                      return (
+                        <div
+                          key={idx}
+                          className={`group relative rounded-xl overflow-hidden bg-gray-100 border transition-all shadow-2xs flex flex-col justify-between ${
+                            isCover
+                              ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm bg-emerald-50/10'
+                              : 'border-gray-200 hover:border-gray-400'
+                          }`}
+                        >
+                          {/* Image container */}
+                          <div className="aspect-[16/11] relative overflow-hidden bg-gray-200">
+                            <img
+                              src={imgUrl}
+                              alt={`Foto properti ${idx + 1}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+
+                            {/* Badge Cover or Index */}
+                            <div className="absolute top-1.5 left-1.5 flex items-center gap-1">
+                              {isCover ? (
+                                <span className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center gap-0.5">
+                                  <span className="material-symbols-outlined text-[11px]">star</span>
+                                  SAMPUL UTAMA
+                                </span>
+                              ) : (
+                                <span className="bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-xs">
+                                  Foto #{idx + 1}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Delete button */}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(idx)}
+                              title="Hapus foto ini dari galeri"
+                              className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 hover:bg-rose-600 text-white flex items-center justify-center transition-colors cursor-pointer shadow-xs"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                          </div>
+
+                          {/* Footer Action Bar for each thumbnail */}
+                          <div className="p-1.5 bg-white border-t border-gray-100 flex items-center justify-between gap-1 text-[10px]">
+                            {/* Make Cover Button */}
+                            {!isCover ? (
+                              <button
+                                type="button"
+                                onClick={() => handleSetCoverImage(idx)}
+                                className="flex-1 py-1 px-1.5 rounded-md bg-blue-50 hover:bg-[#0051d5] text-[#0051d5] hover:text-white font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                                title="Jadikan sebagai foto utama tampilan web"
+                              >
+                                <span className="material-symbols-outlined text-[12px]">star</span>
+                                <span>Jadikan Cover</span>
+                              </button>
+                            ) : (
+                              <span className="flex-1 py-1 px-1.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-center flex items-center justify-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">verified</span>
+                                <span>Sampul Utama</span>
+                              </span>
+                            )}
+
+                            {/* Reorder Buttons */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={() => handleMoveImage(idx, 'prev')}
+                                className="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                                title="Geser ke kiri"
+                              >
+                                <span className="material-symbols-outlined text-[13px]">arrow_back</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === formImages.length - 1}
+                                onClick={() => handleMoveImage(idx, 'next')}
+                                className="p-1 rounded text-gray-500 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
+                                title="Geser ke kanan"
+                              >
+                                <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Preset Photo Selector */}
-                <div>
+                {/* Alternatif 2: Tambah Foto Lewat URL Gambar */}
+                <div className="pt-2 border-t border-gray-200/60">
                   <span className="text-[11px] font-semibold text-gray-700 block mb-1.5">
-                    3. Atau Pilih Cepat Foto Contoh Arsitektur Batam:
+                    Atau Tambahkan Foto dari Tautan (URL Gambar):
                   </span>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={customImageUrlInput}
+                      onChange={(e) => setCustomImageUrlInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddCustomUrl();
+                        }
+                      }}
+                      placeholder="Tempel tautan https://images.unsplash.com/..."
+                      className="flex-1 p-2 rounded-xl bg-white border border-gray-200 text-xs focus:ring-2 focus:ring-[#0051d5] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddCustomUrl}
+                      disabled={!customImageUrlInput.trim()}
+                      className="px-3 py-2 rounded-xl bg-gray-900 hover:bg-[#0051d5] text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-40 flex items-center gap-1 shrink-0"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">add_link</span>
+                      <span>+ Tambah URL</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Alternatif 3: Preset Foto Arsitektur Batam */}
+                <div className="pt-2 border-t border-gray-200/60">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[11px] font-semibold text-gray-700">
+                      Pilihan Cepat Foto Contoh Real Estat Batam (Klik untuk Tambah ke Galeri):
+                    </span>
+                    <span className="text-[10px] text-gray-400">1-Klik Tambah</span>
+                  </div>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {PRESET_IMAGES.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setFormImageUrl(preset.url)}
-                        className={`rounded-lg overflow-hidden border-2 transition-all p-0.5 text-left cursor-pointer group ${
-                          formImageUrl === preset.url ? 'border-[#0051d5] ring-2 ring-[#0051d5]/30' : 'border-transparent hover:border-gray-300'
-                        }`}
-                        title={preset.title}
-                      >
-                        <div className="aspect-video relative rounded overflow-hidden">
-                          <img
-                            src={preset.url}
-                            alt={preset.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                        </div>
-                        <span className="text-[9px] font-medium text-gray-700 truncate block mt-0.5 px-0.5">
-                          {preset.title}
-                        </span>
-                      </button>
-                    ))}
+                    {PRESET_IMAGES.map((preset, idx) => {
+                      const isAlreadyIncluded = formImages.includes(preset.url);
+
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleAddPresetImage(preset.url)}
+                          className={`rounded-lg overflow-hidden border-2 transition-all p-0.5 text-left cursor-pointer group relative ${
+                            isAlreadyIncluded
+                              ? 'border-[#0051d5] ring-2 ring-[#0051d5]/30'
+                              : 'border-transparent hover:border-gray-300'
+                          }`}
+                          title={`Tambah foto: ${preset.title}`}
+                        >
+                          <div className="aspect-video relative rounded overflow-hidden">
+                            <img
+                              src={preset.url}
+                              alt={preset.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            />
+                            {isAlreadyIncluded && (
+                              <span className="absolute bottom-1 right-1 bg-[#0051d5] text-white text-[8px] font-bold px-1 rounded">
+                                Ditambahkan
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[9px] font-medium text-gray-700 truncate block mt-0.5 px-0.5">
+                            {preset.title}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
