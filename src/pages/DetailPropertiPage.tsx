@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { PropertyItem, PageId } from '../types';
 import { PROPERTIES_LIST, BRAND_ASSETS } from '../data/mockData';
+import { 
+  getPropertyPath, 
+  getPropertyAbsoluteUrl, 
+  getPropertyWhatsAppShareUrl, 
+  copyPropertyLinkToClipboard,
+  sharePropertyNative
+} from '../lib/navigation';
+import { ShareListingModal } from '../components/ShareListingModal';
 
 interface DetailPropertiPageProps {
   property?: PropertyItem;
@@ -17,12 +25,34 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
   const [dpPercent, setDpPercent] = useState<number>(20);
   const [tenorYears, setTenorYears] = useState<number>(15);
   const [interestRate, setInterestRate] = useState<number>(4.75);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   // Gallery items
   const allImages = [
     currentProperty.imageUrl,
     ...(currentProperty.additionalImages || []),
   ];
+
+  // Direct page URLs
+  const canonicalPath = getPropertyPath(currentProperty.id);
+  const absoluteUrl = getPropertyAbsoluteUrl(currentProperty.id);
+  const waShareUrl = getPropertyWhatsAppShareUrl(currentProperty);
+
+  const handleCopyLink = async () => {
+    const success = await copyPropertyLinkToClipboard(currentProperty.id);
+    if (success) {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    }
+  };
+
+  const handleNativeShare = async () => {
+    const shared = await sharePropertyNative(currentProperty);
+    if (!shared) {
+      setShareModalOpen(true);
+    }
+  };
 
   // KPR Calculator
   const propertyPrice = currentProperty.price;
@@ -47,25 +77,58 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
   return (
     <div className="w-full flex flex-col bg-[#f8f9ff] py-10 md:py-16">
       <div className="max-w-7xl mx-auto px-4 md:px-8 space-y-8">
-        {/* Navigation Breadcrumb */}
-        <div className="flex items-center gap-2 text-[13px] text-[#75777d]">
-          <button
-            onClick={() => onNavigate('beranda')}
-            className="hover:text-[#0e1c2f] transition-colors cursor-pointer"
-          >
-            Beranda
-          </button>
-          <span>/</span>
-          <button
-            onClick={() => onNavigate('katalog-properti')}
-            className="hover:text-[#0e1c2f] transition-colors cursor-pointer"
-          >
-            Katalog Properti
-          </button>
-          <span>/</span>
-          <span className="text-[#0e1c2f] font-semibold truncate max-w-[200px] sm:max-w-md">
-            {currentProperty.title}
-          </span>
+        {/* Navigation Breadcrumb & Share Trigger */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[13px] text-[#75777d]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => onNavigate('beranda')}
+              className="hover:text-[#0e1c2f] transition-colors cursor-pointer"
+            >
+              Beranda
+            </button>
+            <span>/</span>
+            <button
+              onClick={() => onNavigate('katalog-properti')}
+              className="hover:text-[#0e1c2f] transition-colors cursor-pointer"
+            >
+              Katalog Properti
+            </button>
+            <span>/</span>
+            <span className="text-[#0e1c2f] font-semibold truncate max-w-[200px] sm:max-w-md">
+              {currentProperty.title}
+            </span>
+          </div>
+
+          {/* Quick Page Link Indicator & Action */}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <span className="hidden md:inline text-[11px] font-mono text-[#75777d] bg-white px-2.5 py-1 rounded-md border border-[#e5eeff]">
+              {canonicalPath}
+            </span>
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all cursor-pointer shadow-2xs ${
+                copiedLink
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white hover:bg-[#eff4ff] text-[#0051d5] border border-[#dbe1ff]'
+              }`}
+              title="Salin tautan unik listing ini"
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {copiedLink ? 'check' : 'link'}
+              </span>
+              <span>{copiedLink ? 'Link Tersalin!' : 'Salin Link'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShareModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0e1c2f] hover:bg-[#0051d5] text-white text-[12px] font-bold transition-all cursor-pointer shadow-2xs"
+            >
+              <span className="material-symbols-outlined text-[16px]">share</span>
+              <span>Bagikan</span>
+            </button>
+          </div>
         </div>
 
         {/* Header Title & Price Bar */}
@@ -149,70 +212,83 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
               <div className="p-3 bg-[#eff4ff] rounded-xl text-center">
                 <span className="material-symbols-outlined text-[#0051d5] text-[24px]">bed</span>
                 <p className="text-[11px] text-[#75777d] uppercase font-bold mt-1">Kamar Tidur</p>
-                <p className="text-[16px] font-extrabold text-[#0e1c2f]">{currentProperty.bedrooms || '-'} KT</p>
+                <p className="text-[16px] font-extrabold text-[#0e1c2f]">{currentProperty.bedrooms ?? '-'}</p>
               </div>
               <div className="p-3 bg-[#eff4ff] rounded-xl text-center">
                 <span className="material-symbols-outlined text-[#0051d5] text-[24px]">bathtub</span>
                 <p className="text-[11px] text-[#75777d] uppercase font-bold mt-1">Kamar Mandi</p>
-                <p className="text-[16px] font-extrabold text-[#0e1c2f]">{currentProperty.bathrooms || '-'} KM</p>
+                <p className="text-[16px] font-extrabold text-[#0e1c2f]">{currentProperty.bathrooms ?? '-'}</p>
               </div>
             </div>
 
-            {/* Legalitas & UWTO Verification Box */}
-            <div className="bg-[#eff4ff] p-6 md:p-8 rounded-2xl border border-[#dbe1ff] space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">verified</span>
-                  <h3 className="text-[18px] font-bold text-[#0e1c2f]">
-                    Audit Legalitas & UWTO Batam Clean & Clear
-                  </h3>
-                </div>
-                <span className="text-[11px] font-bold bg-[#0051d5] text-white px-2.5 py-1 rounded-full uppercase">
-                  Terverifikasi 100%
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[13px]">
-                <div className="bg-white p-3.5 rounded-xl border border-[#e5eeff] space-y-1">
-                  <span className="text-[#75777d] text-[11px] uppercase font-bold">Status Sertifikat</span>
-                  <p className="font-bold text-[#0e1c2f]">{currentProperty.legalStatus}</p>
-                </div>
-                <div className="bg-white p-3.5 rounded-xl border border-[#e5eeff] space-y-1">
-                  <span className="text-[#75777d] text-[11px] uppercase font-bold">Jatuh Tempo UWTO BP Batam</span>
-                  <p className="font-bold text-[#0051d5]">{currentProperty.uwtoStatus}</p>
-                </div>
-                <div className="bg-white p-3.5 rounded-xl border border-[#e5eeff] space-y-1">
-                  <span className="text-[#75777d] text-[11px] uppercase font-bold">Peruntukan Ruang</span>
-                  <p className="font-bold text-[#0e1c2f]">Fatwa Planologi Sesuai IMB/PBG</p>
-                </div>
-                <div className="bg-white p-3.5 rounded-xl border border-[#e5eeff] space-y-1">
-                  <span className="text-[#75777d] text-[11px] uppercase font-bold">Pajak PBB-P2 Batam</span>
-                  <p className="font-bold text-emerald-700">Lunas Bebas Tunggakan</p>
-                </div>
-              </div>
-
-              <p className="text-[12px] text-[#44474c] italic">
-                Dokumen telah diaudit silang di Sistem LMS BP Batam dan Kantor Pertanahan ATR/BPN Kota Batam.
-              </p>
-            </div>
-
-            {/* Description */}
+            {/* Description & Overview */}
             <div className="bg-white p-6 md:p-8 rounded-2xl border border-[#e5eeff] shadow-xs space-y-4">
-              <h3 className="text-[18px] font-bold text-[#0e1c2f]">Deskripsi Unit</h3>
+              <h3 className="text-[20px] font-bold text-[#0e1c2f]">Deskripsi Properti</h3>
               <p className="text-[15px] text-[#44474c] leading-relaxed">
                 {currentProperty.description}
               </p>
+            </div>
 
-              <div className="pt-4 border-t border-[#eff4ff]">
-                <h4 className="text-[14px] font-bold text-[#0e1c2f] mb-3">Fasilitas Utama</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {currentProperty.facilities.map((fac, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-[13px] text-[#44474c]">
-                      <span className="material-symbols-outlined text-[#0051d5] text-[18px]">check_circle</span>
-                      <span>{fac}</span>
-                    </div>
-                  ))}
+            {/* Legal Audit & UWTO Card */}
+            <div className="bg-gradient-to-br from-[#0e1c2f] to-[#1a2e47] text-white p-6 md:p-8 rounded-2xl shadow-md space-y-6">
+              <div className="flex items-center justify-between border-b border-white/15 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-[#3ecf8e]">
+                    <span className="material-symbols-outlined text-[24px]">verified_user</span>
+                  </div>
+                  <div>
+                    <h3 className="text-[18px] font-bold">Verifikasi Legalitas & BP Batam</h3>
+                    <p className="text-[12px] text-white/70">Audit Faktur UWTO & Validasi BPN Bersih</p>
+                  </div>
                 </div>
+                <span className="bg-[#3ecf8e]/20 text-[#3ecf8e] text-[11px] font-bold px-3 py-1 rounded-full uppercase border border-[#3ecf8e]/30">
+                  Clean & Clear
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-[11px] uppercase tracking-wider text-white/70 font-semibold">
+                    Status Sertifikat
+                  </p>
+                  <p className="text-[15px] font-bold text-white mt-1">
+                    {currentProperty.legalStatus}
+                  </p>
+                  <p className="text-[11px] text-white/60 mt-1">Peralihan hak via Notaris / PPAT</p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-[11px] uppercase tracking-wider text-white/70 font-semibold">
+                    Masa Berlaku UWTO
+                  </p>
+                  <p className="text-[15px] font-bold text-[#3ecf8e] mt-1">
+                    Hingga Tahun {currentProperty.uwtoExpiryYear}
+                  </p>
+                  <p className="text-[11px] text-white/60 mt-1">{currentProperty.uwtoStatus}</p>
+                </div>
+
+                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
+                  <p className="text-[11px] uppercase tracking-wider text-white/70 font-semibold">
+                    Zonasi & Tata Ruang
+                  </p>
+                  <p className="text-[15px] font-bold text-white mt-1">
+                    Sesuai Fatwa Planologi
+                  </p>
+                  <p className="text-[11px] text-white/60 mt-1">BP Batam & Pemko Bebas Sengketa</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Facilities & Amenities */}
+            <div className="bg-white p-6 md:p-8 rounded-2xl border border-[#e5eeff] shadow-xs space-y-4">
+              <h3 className="text-[20px] font-bold text-[#0e1c2f]">Fasilitas & Keunggulan Spesifikasi</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                {currentProperty.facilities.map((fac, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-[13px] text-[#44474c]">
+                    <span className="material-symbols-outlined text-[#0051d5] text-[18px]">check_circle</span>
+                    <span>{fac}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -279,30 +355,33 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
                       onChange={(e) => setInterestRate(Number(e.target.value))}
                       className="w-full bg-[#eff4ff] rounded-xl px-3 py-2 text-[13px] font-bold text-[#0e1c2f] focus:outline-none"
                     />
-                    <span className="absolute right-3 top-2 text-[12px] text-[#75777d]">%</span>
+                    <span className="absolute right-3 top-2 text-[13px] text-[#75777d]">%</span>
                   </div>
-                  <p className="text-[11px] text-[#75777d]">Fixed 3 Thn Pertama</p>
+                  <p className="text-[11px] text-[#75777d]">Bunga fixed 3-5 tahun pertama</p>
                 </div>
               </div>
 
-              {/* Monthly Installment Result */}
-              <div className="bg-[#eff4ff] p-5 rounded-xl border border-[#dbe1ff] flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Installment Result Box */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-[#eff4ff] to-[#f4f7ff] border border-[#dbe1ff] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <p className="text-[12px] text-[#75777d] uppercase font-bold">
+                  <p className="text-[12px] uppercase font-bold text-[#75777d]">
                     Estimasi Angsuran Bulanan
                   </p>
-                  <p className="text-[26px] md:text-[30px] font-extrabold text-[#0051d5]">
-                    {formatRupiah(monthlyInstallment)} <span className="text-[14px] text-[#44474c] font-normal">/ bulan</span>
+                  <p className="text-[26px] md:text-[32px] font-extrabold text-[#0051d5]">
+                    {formatRupiah(monthlyInstallment)}
+                    <span className="text-[14px] text-[#44474c] font-normal"> / bulan</span>
                   </p>
+                  <p className="text-[11px] text-[#75777d]">Pokok Pinjaman: {formatRupiah(loanPrincipal)}</p>
                 </div>
 
                 <a
-                  href={`https://wa.me/${BRAND_ASSETS.phoneRaw}?text=${encodeURIComponent(`Halo saya ingin konsultasi simulasi KPR untuk unit ${currentProperty.title} dengan DP ${dpPercent}% dan tenor ${tenorYears} tahun`)}`}
+                  href={`https://wa.me/${BRAND_ASSETS.phoneRaw}?text=${encodeURIComponent(`Halo saya ingin konsultasi simulasi KPR untuk unit ${currentProperty.title} (${canonicalPath}) dengan DP ${dpPercent}% dan tenor ${tenorYears} tahun`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-[#0e1c2f] hover:bg-[#0051d5] text-white px-5 py-2.5 rounded-full text-[13px] font-bold transition-colors shrink-0"
+                  className="bg-[#0e1c2f] hover:bg-[#0051d5] text-white px-5 py-2.5 rounded-full text-[13px] font-bold transition-colors shrink-0 flex items-center justify-center gap-1.5"
                 >
-                  Ajukan KPR via Konsultan
+                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                  <span>Ajukan KPR via Konsultan</span>
                 </a>
               </div>
             </div>
@@ -310,6 +389,64 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
 
           {/* Right Column: Assigned Agent Card & Action Widget */}
           <div className="lg:col-span-4 space-y-6 sticky top-24">
+            {/* Direct Page Link Card */}
+            <div className="bg-white p-5 rounded-2xl border border-[#e5eeff] shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#0051d5] uppercase tracking-wider block">
+                  Link Halaman Listing
+                </span>
+                <span className="text-[10px] bg-blue-50 text-[#0051d5] px-2 py-0.5 rounded-md font-mono">
+                  ID: {currentProperty.id}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1.5 bg-[#eff4ff] p-1.5 rounded-xl border border-[#dbe1ff]">
+                <input
+                  type="text"
+                  readOnly
+                  value={absoluteUrl}
+                  onFocus={(e) => e.target.select()}
+                  className="w-full bg-transparent px-2 text-[12px] font-mono text-[#0e1c2f] focus:outline-none truncate"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer ${
+                    copiedLink
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-[#0051d5] hover:bg-[#316bf3] text-white'
+                  }`}
+                  title="Salin link langsung ke clipboard"
+                >
+                  <span className="material-symbols-outlined text-[14px]">
+                    {copiedLink ? 'check' : 'content_copy'}
+                  </span>
+                  <span>{copiedLink ? 'Tersalin' : 'Salin'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <a
+                  href={waShareUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#20ba59] text-white py-2 px-3 rounded-xl text-[12px] font-bold transition-all shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                  <span>Kirim WA</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={handleNativeShare}
+                  className="flex items-center justify-center gap-1.5 bg-[#0e1c2f] hover:bg-[#0051d5] text-white py-2 px-3 rounded-xl text-[12px] font-bold transition-all cursor-pointer shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[16px]">share</span>
+                  <span>Bagikan</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Agent Contact Card */}
             <div className="bg-white p-6 rounded-2xl border border-[#e5eeff] shadow-sm space-y-5">
               <span className="text-[11px] font-bold text-[#0051d5] uppercase tracking-wider block">
                 Konsultan Bertanggung Jawab
@@ -330,7 +467,7 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
 
               <div className="space-y-2 pt-2">
                 <a
-                  href={`https://wa.me/${BRAND_ASSETS.phoneRaw}?text=${encodeURIComponent(`Halo ${currentProperty.agentName}, saya tertarik dan ingin survei unit ${currentProperty.title} di ${currentProperty.location}`)}`}
+                  href={`https://wa.me/${BRAND_ASSETS.phoneRaw}?text=${encodeURIComponent(`Halo ${currentProperty.agentName}, saya tertarik dan ingin survei unit ${currentProperty.title} (${absoluteUrl})`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full inline-flex items-center justify-center gap-2 bg-[#0051d5] hover:bg-[#316bf3] text-white py-3.5 px-4 rounded-xl text-[14px] font-bold transition-all shadow-md cursor-pointer"
@@ -359,24 +496,16 @@ export const DetailPropertiPage: React.FC<DetailPropertiPageProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Quick Share Widget */}
-            <div className="bg-white p-4 rounded-xl border border-[#e5eeff] flex items-center justify-between text-[13px]">
-              <span className="text-[#44474c] font-medium">Tertarik membagikan unit ini?</span>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  alert('Tautan properti disalin ke clipboard!');
-                }}
-                className="text-[#0051d5] font-bold hover:underline flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[16px]">share</span>
-                Salin Tautan
-              </button>
-            </div>
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <ShareListingModal
+        property={currentProperty}
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+      />
     </div>
   );
 };

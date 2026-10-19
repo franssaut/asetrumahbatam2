@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { PropertyItem } from '../types';
 import { PROPERTIES_LIST } from '../data/mockData';
+import { getPropertyPath, copyPropertyLinkToClipboard } from '../lib/navigation';
+import { ShareListingModal } from '../components/ShareListingModal';
 
 interface KatalogPropertiPageProps {
   onSelectProperty: (property: PropertyItem) => void;
@@ -12,6 +14,22 @@ export const KatalogPropertiPage: React.FC<KatalogPropertiPageProps> = ({ onSele
   const [selectedIntent, setSelectedIntent] = useState<'all' | 'jual' | 'sewa'>('all');
   const [sortBy, setSortBy] = useState<'recommended' | 'price-asc' | 'price-desc'>('recommended');
   const [searchQuery, setSearchQuery] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [shareModalProperty, setShareModalProperty] = useState<PropertyItem | null>(null);
+
+  const handleCopyCardLink = async (e: React.MouseEvent, propId: string) => {
+    e.stopPropagation();
+    const success = await copyPropertyLinkToClipboard(propId);
+    if (success) {
+      setCopiedId(propId);
+      setTimeout(() => setCopiedId(null), 2500);
+    }
+  };
+
+  const handleOpenShare = (e: React.MouseEvent, prop: PropertyItem) => {
+    e.stopPropagation();
+    setShareModalProperty(prop);
+  };
 
   const districts = [
     { id: 'all', label: 'Semua Kawasan' },
@@ -226,13 +244,45 @@ export const KatalogPropertiPage: React.FC<KatalogPropertiPageProps> = ({ onSele
                   <div className="absolute top-3 left-3 bg-[#0e1c2f]/85 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full">
                     {prop.category}
                   </div>
-                  <div className="absolute top-3 right-3 bg-emerald-600/90 backdrop-blur-md text-white text-[11px] font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[13px]">verified</span>
-                    <span>UWTO OK</span>
+                  
+                  {/* Action Badges: UWTO & Share Actions */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => handleCopyCardLink(e, prop.id)}
+                      className={`p-1.5 rounded-full backdrop-blur-md transition-all shadow-xs cursor-pointer ${
+                        copiedId === prop.id
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white/90 text-[#0e1c2f] hover:bg-white hover:text-[#0051d5]'
+                      }`}
+                      title={copiedId === prop.id ? 'Tersalin!' : 'Salin tautan listing ini'}
+                    >
+                      <span className="material-symbols-outlined text-[15px] block">
+                        {copiedId === prop.id ? 'check' : 'link'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenShare(e, prop)}
+                      className="p-1.5 rounded-full bg-white/90 backdrop-blur-md text-[#0e1c2f] hover:bg-white hover:text-[#0051d5] transition-all shadow-xs cursor-pointer"
+                      title="Bagikan listing ke WA / medsos"
+                    >
+                      <span className="material-symbols-outlined text-[15px] block">share</span>
+                    </button>
+
+                    <span className="bg-emerald-600/90 backdrop-blur-md text-white text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px]">verified</span>
+                      <span>UWTO OK</span>
+                    </span>
                   </div>
+
                   <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                     <span className="bg-white/95 backdrop-blur-md text-[#0e1c2f] text-[14px] font-extrabold px-3 py-1 rounded-full shadow-xs">
                       {prop.priceFormatted} {prop.period || ''}
+                    </span>
+                    <span className="bg-[#0e1c2f]/80 backdrop-blur-md text-white/90 font-mono text-[10px] px-2 py-0.5 rounded-md">
+                      /properti/{prop.id}
                     </span>
                   </div>
                 </div>
@@ -267,17 +317,38 @@ export const KatalogPropertiPage: React.FC<KatalogPropertiPageProps> = ({ onSele
                     <span className="text-[12px] text-[#75777d]">
                       Konsultan: <strong className="text-[#0e1c2f]">{prop.agentName}</strong>
                     </span>
-                    <button
-                      type="button"
-                      className="bg-[#0e1c2f] group-hover:bg-[#0051d5] text-white px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors"
-                    >
-                      Detail Unit
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => handleCopyCardLink(e, prop.id)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          copiedId === prop.id
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] border-transparent'
+                        }`}
+                        title="Salin Link Halaman Listing"
+                      >
+                        {copiedId === prop.id ? '✓ Tersalin' : 'Salin Link'}
+                      </button>
+                      <button
+                        type="button"
+                        className="bg-[#0e1c2f] group-hover:bg-[#0051d5] text-white px-3 py-1 rounded-lg text-[12px] font-semibold transition-colors"
+                      >
+                        Detail
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Share Listing Modal */}
+          <ShareListingModal
+            property={shareModalProperty}
+            isOpen={!!shareModalProperty}
+            onClose={() => setShareModalProperty(null)}
+          />
 
           {/* Empty State */}
           {filteredProperties.length === 0 && (

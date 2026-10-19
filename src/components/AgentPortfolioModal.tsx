@@ -1,6 +1,7 @@
 import React from 'react';
 import { AgentItem, PropertyItem } from '../types';
 import { PROPERTIES_LIST, BRAND_ASSETS } from '../data/mockData';
+import { copyPropertyLinkToClipboard } from '../lib/navigation';
 
 interface AgentPortfolioModalProps {
   agent: AgentItem | null;
@@ -123,9 +124,20 @@ export const AgentPortfolioModal: React.FC<AgentPortfolioModalProps> = ({
                         onClose();
                         onSelectProperty(prop);
                       }}
-                      className="flex-1 bg-[#0e1c2f] text-white hover:bg-[#0051d5] text-[12px] font-semibold py-2 rounded-lg transition-colors"
+                      className="flex-1 bg-[#0e1c2f] text-white hover:bg-[#0051d5] text-[12px] font-semibold py-2 rounded-lg transition-colors cursor-pointer"
                     >
                       Lihat Detail Unit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await copyPropertyLinkToClipboard(prop.id);
+                        alert(`Link listing ${prop.title} berhasil disalin!`);
+                      }}
+                      className="p-2 rounded-lg bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] flex items-center justify-center transition-colors cursor-pointer"
+                      title="Salin Link Listing"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">link</span>
                     </button>
                     <a
                       href={`https://wa.me/${BRAND_ASSETS.phoneRaw}?text=Halo%20${encodeURIComponent(agent.name)},%20saya%20tertarik%20dengan%20unit%20${encodeURIComponent(prop.title)}`}

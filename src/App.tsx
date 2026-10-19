@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageId, PropertyItem } from './types';
 import { PROPERTIES_LIST, BRAND_ASSETS } from './data/mockData';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { SupabaseModal } from './components/SupabaseModal';
+import { 
+  parseInitialRoute, 
+  getPropertyPath, 
+  PAGE_PATHS 
+} from './lib/navigation';
 
 import { BerandaPage } from './pages/BerandaPage';
 import { KatalogPropertiPage } from './pages/KatalogPropertiPage';
@@ -19,14 +24,59 @@ export default function App() {
   const [selectedProperty, setSelectedProperty] = useState<PropertyItem>(PROPERTIES_LIST[0]);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
 
+  // Parse initial route on load and handle browser back/forward buttons
+  useEffect(() => {
+    const handleRouteSync = () => {
+      const route = parseInitialRoute(PROPERTIES_LIST);
+      setCurrentPage(route.page);
+      if (route.property) {
+        setSelectedProperty(route.property);
+        document.title = `${route.property.title} | Aset Rumah Batam`;
+      } else {
+        updatePageTitle(route.page);
+      }
+    };
+
+    // Run on initial page mount
+    handleRouteSync();
+
+    // Listen to browser navigation (back / forward)
+    window.addEventListener('popstate', handleRouteSync);
+    return () => window.removeEventListener('popstate', handleRouteSync);
+  }, []);
+
+  const updatePageTitle = (page: PageId) => {
+    const titles: Record<PageId, string> = {
+      'beranda': 'Aset Rumah Batam | Broker Properti Mewah & Legalitas UWTO Resmi',
+      'katalog-properti': 'Katalog Properti Pilihan Batam | Aset Rumah Batam',
+      'detail-properti': 'Detail Properti | Aset Rumah Batam',
+      'panduan-legalitas-uwto': 'Panduan Siklus UWTO BP Batam & Hak Pakai WNA | Aset Rumah Batam',
+      'konsultasi-agen': 'Konsultasi Agen & Legalitas Properti Batam | Aset Rumah Batam',
+      'tentang-kami': 'Tentang Kami | Broker Terakreditasi Batam',
+      'titip-properti': 'Titip Jual & Sewa Properti Batam | Aset Rumah Batam',
+      'faq-bantuan': 'Pusat FAQ & Bantuan Legal Properti Batam',
+    };
+    document.title = titles[page] || 'Aset Rumah Batam';
+  };
+
   const handleNavigate = (page: PageId) => {
     setCurrentPage(page);
+    const targetPath = PAGE_PATHS[page] || '/';
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+    updatePageTitle(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSelectProperty = (property: PropertyItem) => {
     setSelectedProperty(property);
     setCurrentPage('detail-properti');
+    const targetPath = getPropertyPath(property.id);
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState(null, '', targetPath);
+    }
+    document.title = `${property.title} | Aset Rumah Batam`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
