@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, PropertyItem, PageId } from '../types';
 import { 
   getFavoritePropertyIds, 
@@ -8,8 +8,9 @@ import {
   updateUserProfile, 
   updateUserPassword 
 } from '../lib/auth';
-import { getSupabase } from '../lib/supabase';
+import { getSupabase, submitPropertyListing, submitConsultationBooking } from '../lib/supabase';
 import { getPropertyPath } from '../lib/navigation';
+import { UWTO_TARIFF_DATA, AGENTS_LIST } from '../data/mockData';
 
 interface DashboardUserPageProps {
   user: UserProfile;
@@ -31,6 +32,7 @@ interface LocalSubmission {
   uwto_duration?: string;
   created_at?: string;
   intent?: string;
+  status?: 'review' | 'appraisal' | 'published' | 'deal';
 }
 
 interface LocalBooking {
@@ -42,6 +44,7 @@ interface LocalBooking {
   preferred_time_slot?: string;
   property_interests?: string;
   created_at?: string;
+  status?: 'confirmed' | 'pending' | 'completed';
 }
 
 export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
@@ -52,10 +55,31 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   onLogout,
   onUpdateUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'favorites' | 'submissions' | 'bookings' | 'profile'>('favorites');
+  type DashboardTab = 'overview' | 'favorites' | 'submissions' | 'bookings' | 'kpr-uwto' | 'role-tools' | 'profile';
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [submissions, setSubmissions] = useState<LocalSubmission[]>([]);
   const [bookings, setBookings] = useState<LocalBooking[]>([]);
+
+  // Modals for Quick In-Dashboard Creation
+  const [showQuickSubmitModal, setShowQuickSubmitModal] = useState(false);
+  const [showQuickBookingModal, setShowQuickBookingModal] = useState(false);
+
+  // Quick Submission Form State
+  const [quickSubType, setQuickSubType] = useState('Perumahan Residensial');
+  const [quickSubRegion, setQuickSubRegion] = useState('Batam Center');
+  const [quickSubAddress, setQuickSubAddress] = useState('');
+  const [quickSubPrice, setQuickSubPrice] = useState('1.500.000.000');
+  const [quickSubLegal, setQuickSubLegal] = useState('Sertifikat HGB Murni (BPN)');
+  const [quickSubIntent, setQuickSubIntent] = useState<'jual' | 'sewa'>('jual');
+  const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
+
+  // Quick Booking Form State
+  const [quickBookAgent, setQuickBookAgent] = useState('hendry-tan');
+  const [quickBookTime, setQuickBookTime] = useState('Pagi (10:00 - 11:30 WIB)');
+  const [quickBookInterest, setQuickBookInterest] = useState('Survei Perumahan & Legalitas UWTO');
+  const [isBookingQuick, setIsBookingQuick] = useState(false);
 
   // Profile Edit States
   const [editFullName, setEditFullName] = useState(user.fullName);
@@ -68,6 +92,16 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Interactive KPR Calculator States
+  const [calcPropertyPrice, setCalcPropertyPrice] = useState<number>(1500000000);
+  const [calcDpPercent, setCalcDpPercent] = useState<number>(20);
+  const [calcInterestRate, setCalcInterestRate] = useState<number>(5.5);
+  const [calcTenorYears, setCalcTenorYears] = useState<number>(15);
+
+  // Interactive UWTO Calculator States
+  const [calcUwtoArea, setCalcUwtoArea] = useState<number>(200);
+  const [calcUwtoZoneIndex, setCalcUwtoZoneIndex] = useState<number>(0);
 
   // Sync state when user prop changes
   useEffect(() => {
@@ -118,14 +152,27 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
         setSubmissions([
           {
             id: 'sub-sample-01',
-            property_type: 'Rumah Mewah Hook',
-            region: 'Batam Kota',
-            address: 'Sukajadi Residence Blok B3, Batam Kota',
-            estimated_price: 'Rp 3.850.000.000',
-            legal_status: 'SHGB',
-            uwto_duration: 'Tahun 2046',
+            property_type: 'Cluster Autumn Hills (Rumah 2 Lantai)',
+            region: 'Batam Center',
+            address: 'Central Hills Boulevard Blok B-12',
+            estimated_price: 'Rp 1.450.000.000',
+            legal_status: 'Sertifikat HGB Murni (BPN)',
+            uwto_duration: 'Tahun 2051 (25 Thn)',
             intent: 'jual',
             created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+            status: 'appraisal',
+          },
+          {
+            id: 'sub-sample-02',
+            property_type: 'Ruko Hook Mahkota Raya',
+            region: 'Batam Center',
+            address: 'Kompleks Mahkota Raya Blok A No. 15',
+            estimated_price: 'Rp 2.800.000.000',
+            legal_status: 'Sertifikat HGB Murni (BPN)',
+            uwto_duration: 'Tahun 2045 (19 Thn)',
+            intent: 'jual',
+            created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
+            status: 'published',
           },
         ]);
       }
@@ -170,10 +217,11 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
             id: 'book-sample-01',
             client_name: user.fullName,
             whatsapp_number: user.phone || '+62 812-7000-8812',
-            agent_id: 'Dewi Lestari (Senior Legal Consultant)',
+            agent_id: 'Dewi Lestari (Senior KPR & Residential Advisor)',
             preferred_time_slot: 'Besok Pagi (10:00 - 11:30 WIB)',
             property_interests: 'Konsultasi Perpanjangan UWTO & Investasi Villa Nongsa',
             created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+            status: 'confirmed',
           },
         ]);
       }
@@ -183,8 +231,14 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     loadBookings();
   }, [user]);
 
-  // Favorite properties list
-  const favoriteProperties = properties.filter((p) => favoriteIds.includes(p.id));
+  // Favorite properties list & total portfolio estimate
+  const favoriteProperties = useMemo(() => {
+    return properties.filter((p) => favoriteIds.includes(p.id));
+  }, [properties, favoriteIds]);
+
+  const totalFavoriteValue = useMemo(() => {
+    return favoriteProperties.reduce((acc, curr) => acc + (curr.price || 0), 0);
+  }, [favoriteProperties]);
 
   const handleRemoveFavorite = (propertyId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -192,27 +246,160 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
     setFavoriteIds(res.favorites);
   };
 
+  // Submit Quick Listing inside Dashboard
+  const handleQuickSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmittingQuick(true);
+    try {
+      const res = await submitPropertyListing({
+        userId: user.id,
+        ownerName: user.fullName,
+        ownerWhatsapp: user.phone || '081270008812',
+        propertyType: quickSubType,
+        region: quickSubRegion,
+        address: quickSubAddress || `Kawasan ${quickSubRegion}, Batam`,
+        price: quickSubPrice,
+        landArea: 120,
+        buildingArea: 90,
+        legalStatus: quickSubLegal,
+        uwtoDuration: 'Tahun 2050 (LMS BP Batam Valid)',
+        intent: quickSubIntent,
+        notes: 'Diajukan langsung via Dashboard Pengguna ARB',
+      });
+
+      if (res.success) {
+        const newRecord: LocalSubmission = {
+          id: 'sub_' + Date.now(),
+          user_id: user.id,
+          property_type: quickSubType,
+          region: quickSubRegion,
+          address: quickSubAddress || `Kawasan ${quickSubRegion}, Batam`,
+          estimated_price: `Rp ${quickSubPrice}`,
+          legal_status: quickSubLegal,
+          uwto_duration: 'Tahun 2050',
+          intent: quickSubIntent,
+          created_at: new Date().toISOString(),
+          status: 'review',
+        };
+        setSubmissions([newRecord, ...submissions]);
+        setShowQuickSubmitModal(false);
+        setQuickSubAddress('');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingQuick(false);
+    }
+  };
+
+  // Submit Quick Booking inside Dashboard
+  const handleQuickBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsBookingQuick(true);
+    try {
+      const agentObj = AGENTS_LIST.find((a) => a.id === quickBookAgent) || AGENTS_LIST[0];
+      const res = await submitConsultationBooking({
+        userId: user.id,
+        name: user.fullName,
+        phone: user.phone || '081270008812',
+        agentId: `${agentObj.name} (${agentObj.specialty})`,
+        timeSlot: quickBookTime,
+        interests: quickBookInterest,
+      });
+
+      if (res.success) {
+        const newBooking: LocalBooking = {
+          id: 'book_' + Date.now(),
+          user_id: user.id,
+          client_name: user.fullName,
+          whatsapp_number: user.phone || '081270008812',
+          agent_id: `${agentObj.name} (${agentObj.specialty})`,
+          preferred_time_slot: quickBookTime,
+          property_interests: quickBookInterest,
+          created_at: new Date().toISOString(),
+          status: 'confirmed',
+        };
+        setBookings([newBooking, ...bookings]);
+        setShowQuickBookingModal(false);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsBookingQuick(false);
+    }
+  };
+
+  // KPR Calculator Computation
+  const kprCalculations = useMemo(() => {
+    const price = Math.max(calcPropertyPrice, 100000000);
+    const dpAmount = price * (calcDpPercent / 100);
+    const loanAmount = price - dpAmount;
+    const monthlyRate = (calcInterestRate / 100) / 12;
+    const totalMonths = calcTenorYears * 12;
+
+    let monthlyInstallment = 0;
+    if (monthlyRate > 0) {
+      monthlyInstallment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, totalMonths)) / (Math.pow(1 + monthlyRate, totalMonths) - 1);
+    } else {
+      monthlyInstallment = loanAmount / totalMonths;
+    }
+
+    const totalPayment = (monthlyInstallment * totalMonths) + dpAmount;
+    const totalInterest = totalPayment - price;
+
+    // Additional Batam Real Estate transaction fees
+    const bphtbTax = Math.max(0, (price - 80000000) * 0.05); // BPHTB 5%
+    const notaryFee = price * 0.01; // Notaris / AJB ~1%
+    const bankProvisi = loanAmount * 0.01; // Provisi bank ~1%
+    const totalEstimatedInitialCosts = dpAmount + bphtbTax + notaryFee + bankProvisi;
+
+    return {
+      price,
+      dpAmount,
+      loanAmount,
+      monthlyInstallment,
+      totalPayment,
+      totalInterest,
+      bphtbTax,
+      notaryFee,
+      bankProvisi,
+      totalEstimatedInitialCosts,
+    };
+  }, [calcPropertyPrice, calcDpPercent, calcInterestRate, calcTenorYears]);
+
+  // UWTO Calculator Computation
+  const uwtoCalculations = useMemo(() => {
+    const zone = UWTO_TARIFF_DATA[calcUwtoZoneIndex] || UWTO_TARIFF_DATA[0];
+    const cost30Years = calcUwtoArea * zone.ratePerSqm30Years;
+    const cost20Years = Math.round(cost30Years * (20 / 30));
+    return {
+      zone,
+      cost30Years,
+      cost20Years,
+    };
+  }, [calcUwtoArea, calcUwtoZoneIndex]);
+
   const getRoleBadge = (role: UserProfile['role']) => {
     switch (role) {
       case 'agen':
-        return { label: 'Konsultan Agen ARB', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+        return { label: 'Konsultan Agen Resmi', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
       case 'investor':
-        return { label: 'Investor Prioritas', color: 'bg-purple-100 text-purple-800 border-purple-200' };
+        return { label: 'Investor Prioritas', color: 'bg-purple-100 text-purple-800 border-purple-300' };
       case 'admin':
-        return { label: 'Administrator Portal', color: 'bg-rose-100 text-rose-800 border-rose-200' };
+        return { label: 'Administrator Portal', color: 'bg-rose-100 text-rose-800 border-rose-300' };
       default:
-        return { label: 'Klien Pembeli / Penjual', color: 'bg-blue-100 text-blue-800 border-blue-200' };
+        return { label: 'Klien Pembeli / Penjual', color: 'bg-blue-100 text-blue-800 border-blue-300' };
     }
   };
 
   const roleBadge = getRoleBadge(user.role);
 
   return (
-    <div className="min-h-screen bg-[#f8f9ff] py-8 sm:py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-        {/* Profile Card Header */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.05)] border border-[#eff4ff] mb-8">
+    <div className="min-h-screen bg-[#f8f9ff] py-6 sm:py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+
+        {/* 1. Header Profile Banner */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-[#eff4ff]">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="relative">
@@ -221,45 +408,61 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                   alt={user.fullName}
                   className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover ring-4 ring-[#0051d5]/15 shadow-md"
                 />
-                <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center text-white" title="Akun Aktif">
+                <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 ring-2 ring-white flex items-center justify-center text-white" title="Akun Aktif & Terverifikasi">
                   <span className="material-symbols-outlined text-[13px]">check</span>
                 </span>
               </div>
 
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-[#0e1c2f] tracking-tight">
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-[#0e1c2f] tracking-tight">
                     {user.fullName}
                   </h1>
                   <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${roleBadge.color}`}>
                     {roleBadge.label}
                   </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Supabase Auth Aktif
+                  </span>
                 </div>
-                <p className="text-xs sm:text-sm text-[#44474c] mt-1 flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px] text-gray-400">mail</span>
-                  {user.email}
+                <p className="text-xs sm:text-sm text-[#44474c] mt-1 flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[16px] text-gray-400">mail</span>
+                    {user.email}
+                  </span>
                   {user.phone && (
                     <>
                       <span className="text-gray-300">•</span>
-                      <span className="material-symbols-outlined text-[16px] text-gray-400">phone</span>
-                      {user.phone}
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[16px] text-gray-400">phone</span>
+                        {user.phone}
+                      </span>
                     </>
                   )}
                 </p>
                 <p className="text-[11px] text-gray-400 mt-1">
-                  ID Pengguna: <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-600">{user.id}</code>
+                  ID Supabase: <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-gray-600 text-[10px]">{user.id}</code>
                 </p>
               </div>
             </div>
 
-            {/* Header Action Buttons */}
+            {/* Quick Action Trigger Buttons */}
             <div className="flex flex-wrap items-center gap-2.5">
               <button
-                onClick={() => onNavigate('titip-properti')}
-                className="inline-flex items-center gap-1.5 bg-[#0051d5] hover:bg-[#316bf3] text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,81,213,0.2)] transition-all cursor-pointer"
+                onClick={() => setShowQuickSubmitModal(true)}
+                className="inline-flex items-center gap-1.5 bg-[#0051d5] hover:bg-[#316bf3] active:scale-95 text-white text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl shadow-[0_4px_12px_rgba(0,81,213,0.2)] transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">add_home</span>
-                Titip Properti Baru
+                Titip Properti Cepat
+              </button>
+
+              <button
+                onClick={() => setShowQuickBookingModal(true)}
+                className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#dbe1ff] text-[#0051d5] text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl border border-[#0051d5]/20 transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">calendar_add_on</span>
+                Jadwalkan Survei
               </button>
 
               <button
@@ -267,104 +470,397 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                   await signOutUser();
                   onLogout();
                 }}
-                className="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl border border-red-200 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2.5 rounded-xl border border-red-200 transition-all cursor-pointer"
+                title="Keluar dari akun"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
-                Keluar
               </button>
             </div>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-gray-100">
-            <div className="bg-[#eff4ff]/60 rounded-2xl p-4 border border-[#0051d5]/10">
+          {/* KPI Metrics Dashboard Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-gray-100">
+            <div 
+              onClick={() => setActiveTab('favorites')}
+              className="bg-[#eff4ff]/60 hover:bg-[#eff4ff] rounded-2xl p-4 border border-[#0051d5]/15 transition-all cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">Favorit Tersimpan</span>
-                <span className="material-symbols-outlined text-[#0051d5] text-[20px]">favorite</span>
+                <span className="text-xs font-semibold text-gray-500">Properti Favorit</span>
+                <span className="material-symbols-outlined text-[#0051d5] text-[20px] group-hover:scale-110 transition-transform">favorite</span>
               </div>
-              <p className="text-2xl font-bold text-[#0e1c2f] mt-1">{favoriteIds.length}</p>
+              <p className="text-2xl font-black text-[#0e1c2f] mt-1">{favoriteIds.length}</p>
+              <p className="text-[11px] text-[#0051d5] font-semibold mt-1 truncate">
+                Est. Rp {(totalFavoriteValue / 1000000000).toFixed(1)} Miliar
+              </p>
             </div>
 
-            <div className="bg-[#eff4ff]/60 rounded-2xl p-4 border border-[#0051d5]/10">
+            <div 
+              onClick={() => setActiveTab('submissions')}
+              className="bg-[#eff4ff]/60 hover:bg-[#eff4ff] rounded-2xl p-4 border border-[#0051d5]/15 transition-all cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">Pengajuan Listing</span>
-                <span className="material-symbols-outlined text-[#0051d5] text-[20px]">real_estate_agent</span>
+                <span className="text-xs font-semibold text-gray-500">Listing Diajukan</span>
+                <span className="material-symbols-outlined text-emerald-600 text-[20px] group-hover:scale-110 transition-transform">real_estate_agent</span>
               </div>
-              <p className="text-2xl font-bold text-[#0e1c2f] mt-1">{submissions.length}</p>
+              <p className="text-2xl font-black text-[#0e1c2f] mt-1">{submissions.length}</p>
+              <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                {submissions.filter(s => s.status === 'published').length} Unit Tayang
+              </p>
             </div>
 
-            <div className="bg-[#eff4ff]/60 rounded-2xl p-4 border border-[#0051d5]/10">
+            <div 
+              onClick={() => setActiveTab('bookings')}
+              className="bg-[#eff4ff]/60 hover:bg-[#eff4ff] rounded-2xl p-4 border border-[#0051d5]/15 transition-all cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">Konsultasi Terjadwal</span>
-                <span className="material-symbols-outlined text-[#0051d5] text-[20px]">event_available</span>
+                <span className="text-xs font-semibold text-gray-500">Jadwal Temu & Survei</span>
+                <span className="material-symbols-outlined text-purple-600 text-[20px] group-hover:scale-110 transition-transform">event_available</span>
               </div>
-              <p className="text-2xl font-bold text-[#0e1c2f] mt-1">{bookings.length}</p>
+              <p className="text-2xl font-black text-[#0e1c2f] mt-1">{bookings.length}</p>
+              <p className="text-[11px] text-purple-700 font-semibold mt-1">
+                Agen Siaga Terhubung
+              </p>
             </div>
 
-            <div className="bg-[#eff4ff]/60 rounded-2xl p-4 border border-[#0051d5]/10">
+            <div 
+              onClick={() => setActiveTab('kpr-uwto')}
+              className="bg-[#eff4ff]/60 hover:bg-[#eff4ff] rounded-2xl p-4 border border-[#0051d5]/15 transition-all cursor-pointer group"
+            >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-500">Status Akun</span>
-                <span className="material-symbols-outlined text-emerald-600 text-[20px]">verified</span>
+                <span className="text-xs font-semibold text-gray-500">Simulasi KPR / UWTO</span>
+                <span className="material-symbols-outlined text-amber-600 text-[20px] group-hover:scale-110 transition-transform">calculate</span>
               </div>
-              <p className="text-sm font-bold text-emerald-700 mt-2">Aktif & Terverifikasi</p>
+              <p className="text-lg font-black text-[#0e1c2f] mt-1">Tools Aktif</p>
+              <p className="text-[11px] text-amber-700 font-semibold mt-1">
+                BCA, Mandiri, BP Batam
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Dashboard Navigation Tabs */}
-        <div className="flex items-center gap-2 mb-6 border-b border-gray-200 pb-3 overflow-x-auto">
+        {/* 2. Main Dashboard Navigation Sub-Tabs */}
+        <div className="flex items-center gap-1.5 border-b border-gray-200 pb-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'overview'
+                ? 'bg-[#0051d5] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">dashboard</span>
+            Ringkasan MVP
+          </button>
+
           <button
             onClick={() => setActiveTab('favorites')}
             className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'favorites'
-                ? 'bg-[#0051d5] text-white shadow-md'
+                ? 'bg-[#0051d5] text-white shadow-sm'
                 : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
             }`}
           >
             <span className="material-symbols-outlined text-[18px]">favorite</span>
-            Properti Favorit ({favoriteIds.length})
+            Favorit ({favoriteIds.length})
           </button>
 
           <button
             onClick={() => setActiveTab('submissions')}
             className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'submissions'
-                ? 'bg-[#0051d5] text-white shadow-md'
+                ? 'bg-[#0051d5] text-white shadow-sm'
                 : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">upload_file</span>
-            Listing Diajukan ({submissions.length})
+            <span className="material-symbols-outlined text-[18px]">real_estate_agent</span>
+            Listing Titip ({submissions.length})
           </button>
 
           <button
             onClick={() => setActiveTab('bookings')}
             className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'bookings'
-                ? 'bg-[#0051d5] text-white shadow-md'
+                ? 'bg-[#0051d5] text-white shadow-sm'
                 : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
             }`}
           >
             <span className="material-symbols-outlined text-[18px]">calendar_month</span>
-            Jadwal Konsultasi ({bookings.length})
+            Jadwal Survei ({bookings.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('kpr-uwto')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'kpr-uwto'
+                ? 'bg-[#0051d5] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">calculate</span>
+            Kalkulator KPR & UWTO
+          </button>
+
+          <button
+            onClick={() => setActiveTab('role-tools')}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'role-tools'
+                ? 'bg-[#0051d5] text-white shadow-sm'
+                : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">work</span>
+            Modul Peran: {user.role.toUpperCase()}
           </button>
 
           <button
             onClick={() => setActiveTab('profile')}
             className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'profile'
-                ? 'bg-[#0051d5] text-white shadow-md'
+                ? 'bg-[#0051d5] text-white shadow-sm'
                 : 'text-gray-600 hover:text-[#0e1c2f] hover:bg-white'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
-            Profil & Demo Role
+            <span className="material-symbols-outlined text-[18px]">settings</span>
+            Pengaturan Akun
           </button>
         </div>
 
-        {/* TAB 1: FAVORITES */}
+        {/* ========================================================= */}
+        {/* TAB 1: OVERVIEW / BERANDA DASHBOARD                       */}
+        {/* ========================================================= */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* Quick Actions Bar */}
+            <div className="bg-white rounded-3xl p-6 border border-[#eff4ff] shadow-xs">
+              <h2 className="text-sm font-bold text-[#0e1c2f] mb-3 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#0051d5] text-[20px]">bolt</span>
+                Aksi Cepat Dashboard
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button
+                  onClick={() => onNavigate('katalog-properti')}
+                  className="p-3.5 rounded-2xl bg-blue-50/70 hover:bg-blue-100 text-left transition-all border border-blue-100 group cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[#0051d5] text-[24px] mb-1 group-hover:scale-110 transition-transform">explore</span>
+                  <p className="text-xs font-bold text-[#0e1c2f]">Jelajahi Katalog</p>
+                  <p className="text-[10px] text-gray-500">Cari rumah mewah & perumahan</p>
+                </button>
+
+                <button
+                  onClick={() => setShowQuickSubmitModal(true)}
+                  className="p-3.5 rounded-2xl bg-emerald-50/70 hover:bg-emerald-100 text-left transition-all border border-emerald-100 group cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-emerald-600 text-[24px] mb-1 group-hover:scale-110 transition-transform">add_business</span>
+                  <p className="text-xs font-bold text-[#0e1c2f]">Titip Jual / Sewa</p>
+                  <p className="text-[10px] text-gray-500">Form pengajuan instan</p>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('kpr-uwto')}
+                  className="p-3.5 rounded-2xl bg-amber-50/70 hover:bg-amber-100 text-left transition-all border border-amber-100 group cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-amber-600 text-[24px] mb-1 group-hover:scale-110 transition-transform">savings</span>
+                  <p className="text-xs font-bold text-[#0e1c2f]">Simulasi Angsuran KPR</p>
+                  <p className="text-[10px] text-gray-500">Hitung bunga & cicilan riil</p>
+                </button>
+
+                <button
+                  onClick={() => setShowQuickBookingModal(true)}
+                  className="p-3.5 rounded-2xl bg-purple-50/70 hover:bg-purple-100 text-left transition-all border border-purple-100 group cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-purple-600 text-[24px] mb-1 group-hover:scale-110 transition-transform">calendar_clock</span>
+                  <p className="text-xs font-bold text-[#0e1c2f]">Survei Bersama Agen</p>
+                  <p className="text-[10px] text-gray-500">Pilih waktu & lokasi unit</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Split Section: Pipeline & Latest Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left (2 cols): Submission Pipeline Status */}
+              <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-[#eff4ff] shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-[#0e1c2f] flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#0051d5] text-[20px]">account_tree</span>
+                    Status Pelacakan Listing Saya (Pipeline Tracker)
+                  </h3>
+                  <button
+                    onClick={() => setActiveTab('submissions')}
+                    className="text-xs text-[#0051d5] font-semibold hover:underline"
+                  >
+                    Lihat Semua
+                  </button>
+                </div>
+
+                {submissions.length === 0 ? (
+                  <div className="py-8 text-center text-gray-400 text-xs">
+                    Belum ada listing yang diajukan.
+                  </div>
+                ) : (
+                  submissions.slice(0, 3).map((item, idx) => {
+                    const statusText = item.status === 'published' 
+                      ? 'Listing Aktif di Katalog' 
+                      : item.status === 'appraisal' 
+                      ? 'Survei & Foto HDR Tim ARB' 
+                      : 'Verifikasi Legalitas & Fatwa BP Batam';
+                    const stepIndex = item.status === 'published' ? 4 : item.status === 'appraisal' ? 3 : 2;
+
+                    return (
+                      <div key={item.id || idx} className="p-4 rounded-2xl bg-[#eff4ff]/40 border border-[#0051d5]/10 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-blue-100 text-[#0051d5]">
+                              {item.intent || 'Jual'}
+                            </span>
+                            <h4 className="font-bold text-sm text-[#0e1c2f] mt-1">{item.property_type}</h4>
+                            <p className="text-xs text-gray-500">{item.address || item.region}</p>
+                          </div>
+                          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                            {statusText}
+                          </span>
+                        </div>
+
+                        {/* Pipeline Stepper */}
+                        <div className="grid grid-cols-4 gap-1 pt-1 text-[10px] text-center font-semibold">
+                          <div className={`p-1.5 rounded-lg ${stepIndex >= 1 ? 'bg-[#0051d5] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            1. Masuk
+                          </div>
+                          <div className={`p-1.5 rounded-lg ${stepIndex >= 2 ? 'bg-[#0051d5] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            2. Legalitas
+                          </div>
+                          <div className={`p-1.5 rounded-lg ${stepIndex >= 3 ? 'bg-[#0051d5] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            3. Foto & Nilai
+                          </div>
+                          <div className={`p-1.5 rounded-lg ${stepIndex >= 4 ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                            4. Tayang Web
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Right (1 col): Assigned Consultant Card & Next Appointment */}
+              <div className="bg-white rounded-3xl p-6 border border-[#eff4ff] shadow-xs space-y-4 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-[#0e1c2f] flex items-center gap-2 mb-3">
+                    <span className="material-symbols-outlined text-purple-600 text-[20px]">support_agent</span>
+                    Konsultan Properti Siaga
+                  </h3>
+
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-purple-50/50 border border-purple-100">
+                    <img
+                      src={AGENTS_LIST[1].photoUrl}
+                      alt="Konsultan"
+                      className="w-12 h-12 rounded-xl object-cover ring-2 ring-purple-200"
+                    />
+                    <div>
+                      <p className="text-xs font-bold text-[#0e1c2f]">{AGENTS_LIST[1].name}</p>
+                      <p className="text-[11px] text-purple-700 font-semibold">{AGENTS_LIST[1].role}</p>
+                      <p className="text-[10px] text-gray-500">Spesialisasi: {AGENTS_LIST[1].specialty}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-2 text-xs text-gray-600">
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span>Rating Kepuasan</span>
+                      <strong className="text-amber-600 flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[14px]">star</span>
+                        5.0 (38 Klien)
+                      </strong>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span>Status Layanan</span>
+                      <strong className="text-emerald-600 flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                        Online Siaga
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <a
+                  href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Bu Dewi Lestari, saya ${user.fullName} ingin konsultasi properti dan legalitas Batam.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">chat</span>
+                  Chat WhatsApp Konsultan
+                </a>
+              </div>
+            </div>
+
+            {/* Recommended Properties Preview */}
+            <div className="bg-white rounded-3xl p-6 border border-[#eff4ff] shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-[#0e1c2f]">Rekomendasi Properti Terbaru di Batam</h3>
+                  <p className="text-xs text-gray-500">Pilihan unit residensial dan investasi dengan legalitas clean & clear</p>
+                </div>
+                <button
+                  onClick={() => onNavigate('katalog-properti')}
+                  className="text-xs text-[#0051d5] font-semibold hover:underline"
+                >
+                  Buka Katalog Lengkap ({properties.length} Unit)
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {properties.slice(0, 3).map((prop) => (
+                  <div
+                    key={prop.id}
+                    onClick={() => onSelectProperty(prop)}
+                    className="group rounded-2xl border border-gray-100 hover:border-[#0051d5]/30 overflow-hidden bg-white hover:shadow-md transition-all cursor-pointer flex flex-col justify-between"
+                  >
+                    <div className="aspect-video relative overflow-hidden">
+                      <img
+                        src={prop.imageUrl}
+                        alt={prop.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded bg-[#0e1c2f]/80 text-white">
+                        {prop.category}
+                      </span>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-[11px] text-[#0051d5] font-semibold">{prop.location}, {prop.district}</p>
+                      <h4 className="text-xs sm:text-sm font-bold text-[#0e1c2f] line-clamp-1 mt-0.5 group-hover:text-[#0051d5] transition-colors">
+                        {prop.title}
+                      </h4>
+                      <p className="text-sm font-extrabold text-[#0051d5] mt-1">{prop.priceFormatted}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 2: PROPERTI FAVORIT                                   */}
+        {/* ========================================================= */}
         {activeTab === 'favorites' && (
-          <div>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
+                  Koleksi Properti Favorit Anda ({favoriteProperties.length})
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Total estimasi nilai portofolio tersimpan: <strong className="text-[#0e1c2f]">Rp {(totalFavoriteValue / 1000000000).toFixed(2)} Miliar</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => onNavigate('katalog-properti')}
+                className="inline-flex items-center gap-1.5 bg-[#0051d5] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#316bf3] transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Tambah dari Katalog
+              </button>
+            </div>
+
             {favoriteProperties.length === 0 ? (
               <div className="bg-white rounded-3xl p-12 text-center border border-[#eff4ff] shadow-xs">
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center text-[#0051d5]">
@@ -445,18 +941,14 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 pt-2">
-                        <a
-                          href={getPropertyPath(prop.id)}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            onSelectProperty(prop);
-                          }}
+                        <button
+                          onClick={() => onSelectProperty(prop)}
                           className="flex-1 py-2 text-center rounded-xl bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white font-semibold text-xs transition-colors cursor-pointer"
                         >
-                          Lihat Detail
-                        </a>
+                          Lihat Detail Unit
+                        </button>
                         <a
-                          href={`https://wa.me/?text=${encodeURIComponent(`Halo, saya tertarik dengan listing ${prop.title} (${prop.priceFormatted}): ${window.location.origin}${getPropertyPath(prop.id)}`)}`}
+                          href={`https://wa.me/?text=${encodeURIComponent(`Halo, saya tertarik dengan listing ${prop.title} (${prop.priceFormatted}) di Batam: ${window.location.origin}${getPropertyPath(prop.id)}`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-600 transition-colors"
@@ -473,19 +965,24 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
           </div>
         )}
 
-        {/* TAB 2: SUBMISSIONS */}
+        {/* ========================================================= */}
+        {/* TAB 3: PENGAJUAN TITIP PROPERTI (LISTING SAYA)            */}
+        {/* ========================================================= */}
         {activeTab === 'submissions' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
-                Riwayat Pengajuan Titip Properti ({submissions.length})
-              </h2>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
+                  Riwayat Pengajuan Titip Properti ({submissions.length})
+                </h2>
+                <p className="text-xs text-gray-500">Kelola dan pantau proses verifikasi listing Anda oleh tim legal ARB</p>
+              </div>
               <button
-                onClick={() => onNavigate('titip-properti')}
+                onClick={() => setShowQuickSubmitModal(true)}
                 className="inline-flex items-center gap-1.5 bg-[#0051d5] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#316bf3] transition-all cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[16px]">add</span>
-                Ajukan Titip Jual / Sewa
+                <span className="material-symbols-outlined text-[16px]">add_home</span>
+                Titip Properti Baru
               </button>
             </div>
 
@@ -499,14 +996,14 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                   key={sub.id || idx}
                   className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-[#eff4ff] flex flex-col md:flex-row md:items-center justify-between gap-4"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-[#0051d5] uppercase">
                         {sub.intent || 'Jual'}
                       </span>
-                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1">
+                      <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded flex items-center gap-1 border border-emerald-200">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Sedang Diverifikasi Tim Legal ARB
+                        {sub.status === 'published' ? 'Tayang di Web' : sub.status === 'appraisal' ? 'Appraisal & Foto HDR' : 'Verifikasi Legalitas ARB'}
                       </span>
                     </div>
                     <h3 className="font-bold text-[#0e1c2f] text-base sm:text-lg">{sub.property_type || 'Properti Batam'}</h3>
@@ -515,21 +1012,21 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                       {sub.address || sub.region}
                     </p>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-1">
-                      <span>Perkiraan Harga: <strong className="text-[#0e1c2f]">{sub.estimated_price}</strong></span>
+                      <span>Harga Dititipkan: <strong className="text-[#0e1c2f]">{sub.estimated_price}</strong></span>
                       <span>Legalitas: <strong className="text-[#0e1c2f]">{sub.legal_status}</strong></span>
-                      {sub.uwto_duration && <span>UWTO: <strong className="text-[#0e1c2f]">{sub.uwto_duration}</strong></span>}
+                      {sub.uwto_duration && <span>Status UWTO: <strong className="text-[#0e1c2f]">{sub.uwto_duration}</strong></span>}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <a
-                      href={`https://wa.me/628117788990?text=${encodeURIComponent(`Halo Tim ARB, saya ingin cek progres verifikasi pengajuan properti saya: ${sub.property_type} di ${sub.address || sub.region}`)}`}
+                      href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Tim ARB, saya ingin cek progres verifikasi pengajuan properti saya: ${sub.property_type} di ${sub.address || sub.region}`)}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white px-4 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 bg-[#eff4ff] hover:bg-[#0051d5] text-[#0051d5] hover:text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px]">chat</span>
-                      Tanya Tim Legal
+                      Tanya Tim Legal ARB
                     </a>
                   </div>
                 </div>
@@ -538,60 +1035,393 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
           </div>
         )}
 
-        {/* TAB 3: BOOKINGS */}
+        {/* ========================================================= */}
+        {/* TAB 4: JADWAL KONSULTASI & SURVEI                         */}
+        {/* ========================================================= */}
         {activeTab === 'bookings' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
-                Jadwal Konsultasi & Pendampingan Notaris ({bookings.length})
-              </h2>
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-[#0e1c2f]">
+                  Jadwal Survei Lapangan & Temu Notaris ({bookings.length})
+                </h2>
+                <p className="text-xs text-gray-500">Pendampingan survei privat dan konsultasi legalitas bersama konsultan resmi</p>
+              </div>
               <button
-                onClick={() => onNavigate('konsultasi-agen')}
+                onClick={() => setShowQuickBookingModal(true)}
                 className="inline-flex items-center gap-1.5 bg-[#0051d5] text-white text-xs font-semibold px-4 py-2 rounded-xl hover:bg-[#316bf3] transition-all cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[16px]">add</span>
-                Pilih Jadwal Konsultasi
+                <span className="material-symbols-outlined text-[16px]">calendar_add_on</span>
+                Jadwalkan Survei Baru
               </button>
             </div>
 
-            {bookings.map((book, idx) => (
-              <div
-                key={book.id || idx}
-                className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-[#eff4ff] flex flex-col md:flex-row md:items-center justify-between gap-4"
-              >
-                <div className="space-y-1.5">
-                  <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded inline-flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">schedule</span>
-                    {book.preferred_time_slot || 'Segera Dikonfirmasi'}
-                  </span>
-                  <h3 className="font-bold text-[#0e1c2f] text-base">
-                    Konsultasi bersama: {book.agent_id || 'Konsultan Spesialis Batam'}
-                  </h3>
-                  <p className="text-xs text-gray-600">
-                    Topik Diskusi: <strong>{book.property_interests || 'Legalitas UWTO & Rekomendasi Unit'}</strong>
-                  </p>
-                  <p className="text-[11px] text-gray-400">
-                    No. WhatsApp Terdaftar: {book.whatsapp_number}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`https://wa.me/628117788990?text=${encodeURIComponent(`Halo Konsultan ARB, saya ${user.fullName} ingin konfirmasi jadwal konsultasi properti saya.`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">chat</span>
-                    Buka WhatsApp Agen
-                  </a>
-                </div>
+            {bookings.length === 0 ? (
+              <div className="bg-white rounded-3xl p-10 text-center border border-[#eff4ff]">
+                <p className="text-sm text-gray-500">Belum ada jadwal survei yang dipesan.</p>
               </div>
-            ))}
+            ) : (
+              bookings.map((book, idx) => (
+                <div
+                  key={book.id || idx}
+                  className="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-[#eff4ff] flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">schedule</span>
+                      {book.preferred_time_slot || 'Segera Dikonfirmasi'}
+                    </span>
+                    <h3 className="font-bold text-[#0e1c2f] text-base">
+                      Konsultasi bersama: {book.agent_id || 'Dewi Lestari (Senior Advisor)'}
+                    </h3>
+                    <p className="text-xs text-gray-600">
+                      Topik Diskusi / Minat Unit: <strong>{book.property_interests || 'Legalitas UWTO & Survei Unit'}</strong>
+                    </p>
+                    <p className="text-[11px] text-gray-400">
+                      Pemohon: {book.client_name} • WhatsApp: {book.whatsapp_number}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Konsultan ARB, saya ${user.fullName} ingin konfirmasi agenda survei lapangan properti.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">chat</span>
+                      Konfirmasi via WhatsApp
+                    </a>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 
-        {/* TAB 4: PROFILE & DEMO SWITCHER */}
+        {/* ========================================================= */}
+        {/* TAB 5: KALKULATOR KPR & UWTO INTERAKTIF                   */}
+        {/* ========================================================= */}
+        {activeTab === 'kpr-uwto' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left: KPR Calculator */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff] space-y-5">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[22px]">calculate</span>
+                  <h3 className="text-base font-bold text-[#0e1c2f]">Kalkulator Simulasi KPR Batam</h3>
+                </div>
+                <span className="text-[10px] font-bold text-gray-400">Bank Tier-1 Ready</span>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <label className="font-bold text-[#0e1c2f]">Harga Properti (IDR)</label>
+                    <span className="font-bold text-[#0051d5]">Rp {(calcPropertyPrice).toLocaleString('id-ID')}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="300000000"
+                    max="10000000000"
+                    step="50000000"
+                    value={calcPropertyPrice}
+                    onChange={(e) => setCalcPropertyPrice(Number(e.target.value))}
+                    className="w-full accent-[#0051d5]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="font-bold text-[#0e1c2f] block mb-1">Uang Muka (DP %)</label>
+                    <select
+                      value={calcDpPercent}
+                      onChange={(e) => setCalcDpPercent(Number(e.target.value))}
+                      className="w-full p-2 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                    >
+                      <option value={10}>10% (DP Ringan)</option>
+                      <option value={15}>15%</option>
+                      <option value={20}>20% (Umum)</option>
+                      <option value={30}>30%</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-[#0e1c2f] block mb-1">Suku Bunga (%)</label>
+                    <select
+                      value={calcInterestRate}
+                      onChange={(e) => setCalcInterestRate(Number(e.target.value))}
+                      className="w-full p-2 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                    >
+                      <option value={4.25}>4.25% (Promo BCA)</option>
+                      <option value={5.5}>5.50% (Mandiri Fix)</option>
+                      <option value={6.75}>6.75% (BNI / CIMB)</option>
+                      <option value={8.5}>8.50% (Floating)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-[#0e1c2f] block mb-1">Tenor Kredit</label>
+                    <select
+                      value={calcTenorYears}
+                      onChange={(e) => setCalcTenorYears(Number(e.target.value))}
+                      className="w-full p-2 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                    >
+                      <option value={5}>5 Tahun</option>
+                      <option value={10}>10 Tahun</option>
+                      <option value={15}>15 Tahun</option>
+                      <option value={20}>20 Tahun</option>
+                      <option value={25}>25 Tahun</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Calculation Results Card */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0e1c2f] to-[#0051d5] text-white space-y-3">
+                  <div>
+                    <span className="text-[11px] text-white/80">Estimasi Cicilan Bulanan</span>
+                    <p className="text-2xl font-black tracking-tight">
+                      Rp {Math.round(kprCalculations.monthlyInstallment).toLocaleString('id-ID')}
+                      <span className="text-xs font-normal text-white/80"> / bulan</span>
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/20 text-[11px]">
+                    <div>
+                      <span className="text-white/70 block">Plafon Pinjaman Bank</span>
+                      <strong>Rp {Math.round(kprCalculations.loanAmount).toLocaleString('id-ID')}</strong>
+                    </div>
+                    <div>
+                      <span className="text-white/70 block">Uang Muka (DP {calcDpPercent}%)</span>
+                      <strong>Rp {Math.round(kprCalculations.dpAmount).toLocaleString('id-ID')}</strong>
+                    </div>
+                    <div>
+                      <span className="text-white/70 block">Pajak BPHTB (5%)</span>
+                      <strong>Rp {Math.round(kprCalculations.bphtbTax).toLocaleString('id-ID')}</strong>
+                    </div>
+                    <div>
+                      <span className="text-white/70 block">Estimasi Biaya Awal Total</span>
+                      <strong className="text-emerald-300">Rp {Math.round(kprCalculations.totalEstimatedInitialCosts).toLocaleString('id-ID')}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <a
+                  href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Tim KPR ARB, saya ingin konsultasi pengajuan KPR untuk properti seharga Rp ${calcPropertyPrice.toLocaleString('id-ID')} dengan cicilan sekitar Rp ${Math.round(kprCalculations.monthlyInstallment).toLocaleString('id-ID')}/bulan.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">account_balance</span>
+                  Ajukan Pre-Approval KPR ke Bank Rekanan
+                </a>
+              </div>
+            </div>
+
+            {/* Right: UWTO BP Batam Calculator */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff] space-y-5">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-600 text-[22px]">history_edu</span>
+                  <h3 className="text-base font-bold text-[#0e1c2f]">Kalkulator Tarif UWTO BP Batam</h3>
+                </div>
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded">Tarif Resmi LMS</span>
+              </div>
+
+              <div className="space-y-4 text-xs">
+                <div>
+                  <label className="font-bold text-[#0e1c2f] block mb-1">Zona Wilayah BP Batam</label>
+                  <select
+                    value={calcUwtoZoneIndex}
+                    onChange={(e) => setCalcUwtoZoneIndex(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                  >
+                    {UWTO_TARIFF_DATA.map((z, idx) => (
+                      <option key={idx} value={idx}>
+                        {z.zone} (Rp {z.ratePerSqm30Years.toLocaleString('id-ID')} / m²)
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-500 mt-1">{uwtoCalculations.zone.desc}</p>
+                </div>
+
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <label className="font-bold text-[#0e1c2f]">Luas Tanah (LT)</label>
+                    <span className="font-bold text-[#0051d5]">{calcUwtoArea} m²</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="60"
+                    max="2000"
+                    step="10"
+                    value={calcUwtoArea}
+                    onChange={(e) => setCalcUwtoArea(Number(e.target.value))}
+                    className="w-full accent-amber-600"
+                  />
+                </div>
+
+                {/* UWTO Results Card */}
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-[#0e1c2f] space-y-2">
+                  <span className="text-[11px] text-amber-800 font-semibold">Estimasi Tarif UWTO Resmi BP Batam:</span>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs">Perpanjangan 30 Tahun:</span>
+                    <strong className="text-sm text-amber-900 font-black">
+                      Rp {uwtoCalculations.cost30Years.toLocaleString('id-ID')}
+                    </strong>
+                  </div>
+                  <div className="flex items-center justify-between pt-1 border-t border-amber-200">
+                    <span className="text-xs">Perpanjangan 20 Tahun:</span>
+                    <strong className="text-sm text-amber-900 font-black">
+                      Rp {uwtoCalculations.cost20Years.toLocaleString('id-ID')}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-gray-50 border border-gray-100 text-[11px] text-gray-600 leading-relaxed">
+                  💡 <strong>Catatan Legalitas:</strong> Biaya di atas belum termasuk jasa notaris/PPAT dan faktur LMS BP Batam. Tim legalitas ARB siap mendampingi proses validasi sertifikat dan penerbitan faktur UWTO sampai tuntas.
+                </div>
+
+                <a
+                  href={`https://wa.me/6282391059216?text=${encodeURIComponent(`Halo Tim Legal ARB, saya ingin konsultasi perpanjangan UWTO tanah luas ${calcUwtoArea} m² di kawasan ${uwtoCalculations.zone.zone}.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#0e1c2f] hover:bg-[#0051d5] text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">gavel</span>
+                  Konsultasi Legalitas & LMS BP Batam
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 6: MODUL SPESIFIK BERDASARKAN PERAN PENGGUNA          */}
+        {/* ========================================================= */}
+        {activeTab === 'role-tools' && (
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff] space-y-6">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-[#0e1c2f] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">workspace_premium</span>
+                  Modul Khusus: {roleBadge.label}
+                </h3>
+                <p className="text-xs text-gray-500">Fitur dirancang sesuai kebutuhan peran akun Anda</p>
+              </div>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full border ${roleBadge.color}`}>
+                Mode {user.role.toUpperCase()}
+              </span>
+            </div>
+
+            {/* Sub-view for KLIEN */}
+            {user.role === 'klien' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">verified_user</span>
+                  <h4 className="font-bold text-sm text-[#0e1c2f]">Jaminan Bebas Sengketa</h4>
+                  <p className="text-xs text-gray-600">Seluruh unit listing di Aset Rumah Batam melewati due-diligence legalitas 4 pilar di BPN & BP Batam.</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">price_change</span>
+                  <h4 className="font-bold text-sm text-[#0e1c2f]">Alert Penurunan Harga</h4>
+                  <p className="text-xs text-gray-600">Dapatkan notifikasi jika listing favorit Anda mengalami penyesuaian harga dari pemilik.</p>
+                </div>
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-2">
+                  <span className="material-symbols-outlined text-[#0051d5] text-[24px]">description</span>
+                  <h4 className="font-bold text-sm text-[#0e1c2f]">Draft Akta & Dokumen</h4>
+                  <p className="text-xs text-gray-600">Akses format checklist AJB, Fatwa Planologi, dan formulir perpanjangan UWTO resmi.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-view for AGEN */}
+            {user.role === 'agen' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Estimasi Saldo Komisi Listing</span>
+                    <p className="text-2xl font-black text-emerald-800">Rp 48.500.000</p>
+                    <p className="text-[11px] text-emerald-700">Standar AREBI 2.5% Closing Transaksi</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Leads Klien Masuk</span>
+                    <p className="text-2xl font-black text-[#0e1c2f]">14 Calon Buyer</p>
+                    <p className="text-[11px] text-gray-500">6 Menunggu Jadwal Survei</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Akreditasi Agen</span>
+                    <p className="text-sm font-bold text-emerald-800 mt-2">AREBI Certified No. 4921</p>
+                    <p className="text-[11px] text-emerald-600">Aktif s/d 2027</p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200">
+                  <h4 className="font-bold text-xs text-[#0e1c2f] uppercase mb-2">Tindakan Cepat Agen:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setShowQuickSubmitModal(true)} className="px-3 py-1.5 rounded-lg bg-[#0051d5] text-white text-xs font-semibold">
+                      + Input Listing Portofolio Baru
+                    </button>
+                    <button onClick={() => setActiveTab('bookings')} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">
+                      Kelola Janji Temu Klien
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-view for INVESTOR */}
+            {user.role === 'investor' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Rata-rata Yield Sewa Ruko</span>
+                    <p className="text-2xl font-black text-purple-800">7.8% - 9.2% / thn</p>
+                    <p className="text-[11px] text-purple-700">Pusat Bisnis Nagoya & Batam Center</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Regulasi Kepemilikan WNA</span>
+                    <p className="text-sm font-bold text-[#0e1c2f] mt-1">PP No. 18 / 2021 (Hak Pakai)</p>
+                    <p className="text-[11px] text-gray-500">Paspor & Visa Valid Tanpa Perlu PT PMA</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
+                    <span className="text-xs text-gray-500 font-semibold">Peluang Capital Gain</span>
+                    <p className="text-2xl font-black text-emerald-700">12.5% / thn</p>
+                    <p className="text-[11px] text-gray-500">Kawasan KEK Nongsa & Kabil FTZ</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-view for ADMIN */}
+            {user.role === 'admin' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200">
+                    <span className="text-[11px] text-rose-700 font-semibold">Total Pengguna</span>
+                    <p className="text-xl font-black text-rose-900 mt-0.5">184 Akun</p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200">
+                    <span className="text-[11px] text-blue-700 font-semibold">Listing Database</span>
+                    <p className="text-xl font-black text-blue-900 mt-0.5">{properties.length} Properti</p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200">
+                    <span className="text-[11px] text-emerald-700 font-semibold">Antrean Verifikasi</span>
+                    <p className="text-xl font-black text-emerald-900 mt-0.5">{submissions.length} Pengajuan</p>
+                  </div>
+                  <div className="p-3.5 rounded-2xl bg-purple-50 border border-purple-200">
+                    <span className="text-[11px] text-purple-700 font-semibold">Status Supabase</span>
+                    <p className="text-xs font-bold text-purple-900 mt-1">🟢 Connected</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 7: PENGATURAN PROFIL & AKUN SUPABASE                   */}
+        {/* ========================================================= */}
         {activeTab === 'profile' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Supabase Profile Edit Form */}
@@ -780,10 +1610,10 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
             <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff]">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-amber-500 text-[20px]">switch_account</span>
-                <h3 className="text-base font-bold text-[#0e1c2f]">Ganti Peran Demo (Testing)</h3>
+                <h3 className="text-base font-bold text-[#0e1c2f]">Ganti Peran Demo (Testing Cepat)</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                Anda dapat beralih peran seketika untuk menguji tampilan portal dari sudut pandang Klien, Agen, Investor, atau Admin.
+                Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Klien, Agen, Investor, atau Admin tanpa perlu logout.
               </p>
 
               <div className="space-y-2.5">
@@ -795,7 +1625,7 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
                 >
                   <div>
                     <p className="text-xs font-bold text-[#0e1c2f]">👤 Budi Santoso (Klien Prioritas)</p>
-                    <p className="text-[11px] text-gray-500">Mencari rumah mewah & investasi di Batam</p>
+                    <p className="text-[11px] text-gray-500">Mencari rumah tinggal & investasi di Batam</p>
                   </div>
                   {user.role === 'klien' && <span className="text-xs text-[#0051d5] font-bold">Sedang Aktif</span>}
                 </button>
@@ -844,6 +1674,230 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
         )}
 
       </div>
+
+      {/* ========================================================= */}
+      {/* QUICK MODAL 1: TITIP PROPERTI CEPAT                       */}
+      {/* ========================================================= */}
+      {showQuickSubmitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#0051d5] text-[22px]">add_home</span>
+                <h3 className="text-base font-bold text-[#0e1c2f]">Titip Properti Langsung</h3>
+              </div>
+              <button
+                onClick={() => setShowQuickSubmitModal(false)}
+                className="p-1 rounded-full text-gray-400 hover:bg-gray-100"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickSubmit} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Tujuan Pengajuan</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickSubIntent('jual')}
+                    className={`py-2 rounded-xl font-bold cursor-pointer transition-all ${
+                      quickSubIntent === 'jual'
+                        ? 'bg-[#0051d5] text-white'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    Titip Jual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickSubIntent('sewa')}
+                    className={`py-2 rounded-xl font-bold cursor-pointer transition-all ${
+                      quickSubIntent === 'sewa'
+                        ? 'bg-[#0051d5] text-white'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    Titip Sewa
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Tipe / Kategori Properti</label>
+                <select
+                  value={quickSubType}
+                  onChange={(e) => setQuickSubType(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                >
+                  <option value="Perumahan Residensial">Perumahan Residensial</option>
+                  <option value="Rumah Mewah">Rumah Mewah</option>
+                  <option value="Ruko Komersial">Ruko Komersial</option>
+                  <option value="Apartemen">Apartemen Penthouse</option>
+                  <option value="Tanah Kavling">Tanah Kavling</option>
+                  <option value="Villa Waterfront">Villa Waterfront</option>
+                  <option value="Gudang Industri">Gudang Industri</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Kawasan Wilayah Batam</label>
+                <select
+                  value={quickSubRegion}
+                  onChange={(e) => setQuickSubRegion(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                >
+                  <option value="Batam Center">Batam Center</option>
+                  <option value="Sukajadi">Sukajadi / KDA</option>
+                  <option value="Nagoya / Lubuk Baja">Nagoya / Lubuk Baja</option>
+                  <option value="Nongsa">Nongsa Waterfront</option>
+                  <option value="Sekupang / Tiban">Sekupang / Tiban</option>
+                  <option value="Batu Aji / Marina">Batu Aji / Marina</option>
+                  <option value="Kabil / Punggur">Kabil / Punggur</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Nama Kompleks / Alamat</label>
+                <input
+                  type="text"
+                  value={quickSubAddress}
+                  onChange={(e) => setQuickSubAddress(e.target.value)}
+                  placeholder="Misal: Perumahan Orchard Park Blok C"
+                  required
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Estimasi Harga (IDR)</label>
+                <input
+                  type="text"
+                  value={quickSubPrice}
+                  onChange={(e) => setQuickSubPrice(e.target.value)}
+                  placeholder="Misal: 1.850.000.000"
+                  required
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Status Sertifikat</label>
+                <select
+                  value={quickSubLegal}
+                  onChange={(e) => setQuickSubLegal(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                >
+                  <option value="Sertifikat HGB Murni (BPN)">Sertifikat HGB Murni (BPN)</option>
+                  <option value="Sertifikat Hak Milik (SHM)">Sertifikat Hak Milik (SHM)</option>
+                  <option value="Hak Pakai / Strata Title">Hak Pakai / Strata Title</option>
+                  <option value="Alokasi BP Batam / SKEP SPJ">Alokasi BP Batam / SKEP SPJ</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickSubmitModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuick}
+                  className="px-5 py-2.5 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmittingQuick ? 'Menyimpan...' : 'Kirim ke Supabase'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* QUICK MODAL 2: JADWALKAN SURVEI PROPERTI                  */}
+      {/* ========================================================= */}
+      {showQuickBookingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-purple-600 text-[22px]">calendar_add_on</span>
+                <h3 className="text-base font-bold text-[#0e1c2f]">Jadwalkan Survei / Temu Agen</h3>
+              </div>
+              <button
+                onClick={() => setShowQuickBookingModal(false)}
+                className="p-1 rounded-full text-gray-400 hover:bg-gray-100"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickBooking} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Pilih Konsultan Spesialis</label>
+                <select
+                  value={quickBookAgent}
+                  onChange={(e) => setQuickBookAgent(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                >
+                  {AGENTS_LIST.map((ag) => (
+                    <option key={ag.id} value={ag.id}>
+                      {ag.name} — {ag.specialty} ({ag.districts})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Waktu Preferensi Temu</label>
+                <select
+                  value={quickBookTime}
+                  onChange={(e) => setQuickBookTime(e.target.value)}
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-semibold"
+                >
+                  <option value="Pagi (09:00 - 11:30 WIB)">Pagi (09:00 - 11:30 WIB)</option>
+                  <option value="Siang (13:30 - 15:30 WIB)">Siang (13:30 - 15:30 WIB)</option>
+                  <option value="Sore (16:00 - 17:30 WIB)">Sore (16:00 - 17:30 WIB)</option>
+                  <option value="Akhir Pekan (Sabtu / Minggu)">Akhir Pekan (Sabtu / Minggu)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#0e1c2f] mb-1">Topik Diskusi / Unit yang Ingin Disurvei</label>
+                <input
+                  type="text"
+                  value={quickBookInterest}
+                  onChange={(e) => setQuickBookInterest(e.target.value)}
+                  placeholder="Misal: Survei Rumah Sukajadi & Simulasi KPR BCA"
+                  required
+                  className="w-full p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickBookingModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isBookingQuick}
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isBookingQuick ? 'Memproses...' : 'Konfirmasi Jadwal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
