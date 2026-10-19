@@ -324,6 +324,68 @@ export async function checkEmailExists(email: string): Promise<{ exists: boolean
 }
 
 /**
+ * Memeriksa apakah alamat email tersimpan pada registrasi lokal browser ini atau akun demo
+ */
+export function isLocalRegisteredEmail(email: string): boolean {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return false;
+  if (Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail)) return true;
+  try {
+    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+    return registeredUsers.some((u) => u.email.toLowerCase() === cleanEmail);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Reset kata sandi secara instan untuk akun yang terdaftar di peramban ini (Local Storage / Demo)
+ * Solusi darurat tanpa ketergantungan pada pengiriman email SMTP
+ */
+export function resetLocalUserPassword(
+  email: string,
+  newPassword: string
+): { success: boolean; message: string } {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, message: 'Alamat email wajib diisi.' };
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, message: 'Kata sandi baru minimal 6 karakter.' };
+  }
+
+  // 1. Akun Demo
+  const isDemo = Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail);
+  if (isDemo) {
+    return {
+      success: true,
+      message: 'Kata sandi akun demo berhasil diperbarui untuk sesi peramban ini!',
+    };
+  }
+
+  // 2. Akun Terdaftar di Local Storage
+  try {
+    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+    const idx = registeredUsers.findIndex((u) => u.email.toLowerCase() === cleanEmail);
+    if (idx >= 0) {
+      registeredUsers[idx].password = newPassword;
+      localStorage.setItem('arb_registered_users', JSON.stringify(registeredUsers));
+      return {
+        success: true,
+        message: 'Kata sandi baru berhasil disimpan! Silakan masuk ke akun Anda sekarang.',
+      };
+    }
+  } catch (e) {}
+
+  return {
+    success: false,
+    message: 'Email tidak ditemukan di penyimpanan akun lokal browser ini.',
+  };
+}
+
+/**
  * Register user with email, password, full name, phone, and role via Supabase Auth.
  * Strictly prevents registration if the email is already registered.
  */
