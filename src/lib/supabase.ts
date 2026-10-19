@@ -236,9 +236,12 @@ function formatPriceRupiah(num: number): string {
 
 function mapSupabasePropertyRow(row: any): PropertyItem {
   const typeMap: Record<string, PropertyItem['category']> = {
-    'Rumah': 'Rumah Mewah',
+    'Rumah': 'Perumahan Residensial',
+    'Perumahan': 'Perumahan Residensial',
+    'Perumahan Residensial': 'Perumahan Residensial',
+    'Rumah Residensial': 'Perumahan Residensial',
     'Rumah Mewah': 'Rumah Mewah',
-    'Townhouse': 'Rumah Mewah',
+    'Townhouse': 'Perumahan Residensial',
     'Komersial': 'Ruko Komersial',
     'Ruko': 'Ruko Komersial',
     'Ruko Komersial': 'Ruko Komersial',
@@ -251,8 +254,8 @@ function mapSupabasePropertyRow(row: any): PropertyItem {
     'Gudang Industri': 'Gudang Industri',
   };
 
-  const rawType = String(row.type || row.category || 'Rumah Mewah');
-  const category = typeMap[rawType] || 'Rumah Mewah';
+  const rawType = String(row.type || row.category || 'Perumahan Residensial');
+  const category = typeMap[rawType] || 'Perumahan Residensial';
 
   let district = 'Batam Center';
   const loc = (row.location || '').toLowerCase();
@@ -261,6 +264,7 @@ function mapSupabasePropertyRow(row: any): PropertyItem {
   else if (loc.includes('nagoya') || loc.includes('jodoh') || loc.includes('lubuk baja')) district = 'Nagoya / Lubuk Baja';
   else if (loc.includes('kabil') || loc.includes('punggur')) district = 'Kabil / Punggur';
   else if (loc.includes('tiban') || loc.includes('sekupang')) district = 'Sekupang / Tiban';
+  else if (loc.includes('batu aji') || loc.includes('marina') || loc.includes('sagulung')) district = 'Batu Aji / Marina';
   else if (loc.includes('batam centre') || loc.includes('batam center')) district = 'Batam Center';
 
   const rawPrice = Number(row.price) || 0;

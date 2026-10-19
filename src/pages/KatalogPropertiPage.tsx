@@ -46,11 +46,13 @@ export const KatalogPropertiPage: React.FC<KatalogPropertiPageProps> = ({
     { id: 'Nagoya / Lubuk Baja', label: 'Nagoya' },
     { id: 'Nongsa', label: 'Nongsa' },
     { id: 'Sekupang / Tiban', label: 'Sekupang / Tiban' },
+    { id: 'Batu Aji / Marina', label: 'Batu Aji / Marina' },
     { id: 'Kabil / Punggur', label: 'Kabil' },
   ];
 
   const categories = [
     { id: 'all', label: 'Semua Tipe' },
+    { id: 'Perumahan Residensial', label: 'Perumahan Residensial' },
     { id: 'Rumah Mewah', label: 'Rumah Mewah' },
     { id: 'Villa Waterfront', label: 'Villa Waterfront' },
     { id: 'Ruko Komersial', label: 'Ruko Komersial' },

@@ -22,7 +22,7 @@ export interface UserProfile {
 export interface PropertyItem {
   id: string;
   title: string;
-  category: 'Rumah Mewah' | 'Ruko Komersial' | 'Tanah Kavling' | 'Apartemen' | 'Villa Waterfront' | 'Gudang Industri';
+  category: 'Rumah Mewah' | 'Perumahan Residensial' | 'Ruko Komersial' | 'Tanah Kavling' | 'Apartemen' | 'Villa Waterfront' | 'Gudang Industri';
   location: string;
   district: string;
   price: number; // in IDR

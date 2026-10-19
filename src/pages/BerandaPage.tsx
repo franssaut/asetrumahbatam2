@@ -94,7 +94,8 @@ export const BerandaPage: React.FC<BerandaPageProps> = ({
                 <option value="Batam Center">Batam Center</option>
                 <option value="Nagoya / Lubuk Baja">Nagoya / Lubuk Baja</option>
                 <option value="Nongsa">Nongsa Waterfront</option>
-                <option value="Tiban / Sekupang">Tiban / Sekupang</option>
+                <option value="Sekupang / Tiban">Tiban / Sekupang</option>
+                <option value="Batu Aji / Marina">Batu Aji / Marina</option>
               </select>
             </div>
 
@@ -109,6 +110,7 @@ export const BerandaPage: React.FC<BerandaPageProps> = ({
                 className="bg-transparent text-[14px] font-semibold text-[#0b1c30] focus:outline-none cursor-pointer mt-0.5"
               >
                 <option value="Semua Tipe">Semua Tipe</option>
+                <option value="Perumahan Residensial">Perumahan Residensial</option>
                 <option value="Rumah Mewah">Rumah Mewah</option>
                 <option value="Ruko Komersial">Ruko Komersial</option>
                 <option value="Villa Waterfront">Villa Waterfront</option>

@@ -19,6 +19,7 @@ export const TitipPropertiPage: React.FC = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   const propertyTypes = [
+    { id: 'Perumahan Residensial', label: 'Perumahan Residensial', icon: 'home' },
     { id: 'Rumah Mewah', label: 'Rumah Mewah', icon: 'villa' },
     { id: 'Ruko Komersial', label: 'Ruko Komersial', icon: 'storefront' },
     { id: 'Tanah Kavling', label: 'Tanah Kavling', icon: 'landscape' },
