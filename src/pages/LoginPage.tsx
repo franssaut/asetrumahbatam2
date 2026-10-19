@@ -299,6 +299,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       const res = await resetPasswordForEmail(targetEmail, activeSiteUrl);
       if (res.success) {
         setForgotSent(true);
+        if (res.fallbackOtp) {
+          setOtpCode(res.fallbackOtp);
+        }
         setResendCountdown(60);
         setResendCount(1);
         setSuccessMsg(res.message);
@@ -328,7 +331,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       if (res.success) {
         setResendCount((prev) => prev + 1);
         setResendCountdown(60);
-        setSuccessMsg(`Tautan pemulihan baru berhasil dikirim ulang ke ${targetEmail}! Tautan mengarah ke: ${activeSiteUrl}`);
+        if (res.fallbackOtp) {
+          setOtpCode(res.fallbackOtp);
+        }
+        setSuccessMsg(res.message);
       } else {
         setErrorMsg(res.message);
       }
