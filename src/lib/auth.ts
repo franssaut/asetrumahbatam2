@@ -1,5 +1,6 @@
 import { getSupabase } from './supabase';
 import { UserProfile } from '../types';
+import { getResendConfig } from './resend';
 
 const AUTH_STORAGE_KEY = 'arb_auth_user';
 const FAVORITES_STORAGE_KEY = 'arb_favorite_properties';
@@ -548,16 +549,19 @@ export async function resetPasswordForEmail(email: string): Promise<{ success: b
       let msg = error.message;
       const lower = msg.toLowerCase();
       if (lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
-        msg = 'Terlalu banyak permintaan kirim ulang. Mohon tunggu sekitar 60 detik sebelum mengirim ulang tautan pemulihan.';
+        msg = 'Batas pengiriman email bawaan Supabase tercapai (3 email/jam). Aktifkan Custom SMTP Resend di Supabase Dashboard (menu Supabase > Tab Resend SMTP) untuk pengiriman tanpa batas kuota.';
       } else if (lower.includes('user not found')) {
         msg = 'Email tidak ditemukan di Supabase Auth. Mohon periksa kembali alamat email Anda.';
       }
       return { success: false, message: msg };
     }
 
+    const resendCfg = getResendConfig();
+    const deliveryProvider = resendCfg.isConfigured ? 'Resend SMTP' : 'Supabase Email';
+
     return {
       success: true,
-      message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail}. Silakan periksa kotak masuk atau spam email Anda.`,
+      message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail} (via ${deliveryProvider}). Silakan periksa kotak masuk atau spam email Anda.`,
     };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal mengirim email reset kata sandi.' };

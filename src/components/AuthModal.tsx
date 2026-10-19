@@ -16,7 +16,7 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: (user: UserProfile) => void;
   initialTab?: 'login' | 'register';
-  onOpenSupabaseModal?: () => void;
+  onOpenSupabaseModal?: (tab?: 'config' | 'schema' | 'data' | 'resend') => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -629,9 +629,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <span className="material-symbols-outlined text-[16px]">arrow_back</span>
                       Kembali ke Masuk Akun
                     </button>
-                    <h3 className="font-bold text-base text-[#0e1c2f]">Pemulihan Kata Sandi</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-base text-[#0e1c2f]">Pemulihan Kata Sandi</h3>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-[#0051d5] text-[10px] font-bold">
+                        <span>✉️</span> Resend SMTP
+                      </span>
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Masukkan email terdaftar Anda. Supabase Auth akan mengirimkan tautan aman untuk mengatur ulang kata sandi Anda.
+                      Masukkan email terdaftar Anda. Supabase Auth didukung infrastruktur <strong>Resend</strong> akan mengirimkan tautan aman untuk mengatur ulang kata sandi Anda.
                     </p>
                   </div>
 
@@ -667,10 +672,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     ) : (
                       <>
                         <span className="material-symbols-outlined text-[18px]">send</span>
-                        <span>Kirim Tautan Reset via Supabase</span>
+                        <span>Kirim Tautan Reset via Resend</span>
                       </>
                     )}
                   </button>
+
+                  {onOpenSupabaseModal && (
+                    <div className="pt-1 flex items-center justify-between text-[11px] text-gray-500">
+                      <span>Pengiriman bebas kuota via Resend</span>
+                      <button
+                        type="button"
+                        onClick={() => onOpenSupabaseModal('resend')}
+                        className="text-[#0051d5] hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
+                      >
+                        <span>Panduan Resend SMTP</span>
+                        <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                      </button>
+                    </div>
+                  )}
                 </form>
               ) : (
                 <div className="space-y-4 animate-in fade-in">
@@ -680,7 +699,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <p className="font-bold text-sm text-emerald-950">Tautan Pemulihan Terkirim!</p>
                     </div>
                     <p className="leading-relaxed text-emerald-800">
-                      Tautan aman pemulihan sandi telah dikirim ke: <strong className="text-emerald-950">{forgotEmail}</strong>.
+                      Tautan aman pemulihan sandi telah dikirim ke: <strong className="text-emerald-950">{forgotEmail}</strong> melalui infrastruktur Resend SMTP.
                       Silakan periksa kotak masuk utama atau spam email Anda.
                     </p>
                     <div className="text-[11px] text-emerald-700 flex items-center gap-1">

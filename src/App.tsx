@@ -3,7 +3,7 @@ import { PageId, PropertyItem, UserProfile } from './types';
 import { PROPERTIES_LIST, BRAND_ASSETS } from './data/mockData';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { SupabaseModal } from './components/SupabaseModal';
+import { SupabaseModal, SupabaseModalTab } from './components/SupabaseModal';
 import { AuthModal } from './components/AuthModal';
 import { fetchProperties } from './lib/supabase';
 import { getStoredUser, signOutUser, demoLogin, initSupabaseAuth } from './lib/auth';
@@ -29,9 +29,15 @@ export default function App() {
   const [properties, setProperties] = useState<PropertyItem[]>(PROPERTIES_LIST);
   const [selectedProperty, setSelectedProperty] = useState<PropertyItem>(PROPERTIES_LIST[0]);
   const [showSupabaseModal, setShowSupabaseModal] = useState(false);
+  const [supabaseModalTab, setSupabaseModalTab] = useState<SupabaseModalTab>('config');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [loadingProperties, setLoadingProperties] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getStoredUser());
+
+  const handleOpenSupabaseModal = (tab: SupabaseModalTab = 'config') => {
+    setSupabaseModalTab(tab);
+    setShowSupabaseModal(true);
+  };
 
   // Listen to Supabase auth events & local changes
   useEffect(() => {
@@ -287,7 +293,7 @@ export default function App() {
               handleNavigate('dashboard-user');
             }}
             onLogout={handleLogout}
-            onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+            onOpenSupabaseModal={handleOpenSupabaseModal}
           />
         )}
       </main>
@@ -295,7 +301,7 @@ export default function App() {
       {/* Footer */}
       <Footer
         onNavigate={handleNavigate}
-        onOpenSupabaseModal={() => setShowSupabaseModal(true)}
+        onOpenSupabaseModal={() => handleOpenSupabaseModal('config')}
       />
 
       {/* Auth Modal (Login / Register) */}
@@ -306,16 +312,17 @@ export default function App() {
           setCurrentUser(user);
           setShowAuthModal(false);
         }}
-        onOpenSupabaseModal={() => {
+        onOpenSupabaseModal={(tab) => {
           setShowAuthModal(false);
-          setShowSupabaseModal(true);
+          handleOpenSupabaseModal(tab || 'config');
         }}
       />
 
-      {/* Supabase Integration & Schema Modal */}
+      {/* Supabase & Resend SMTP Integration Modal */}
       <SupabaseModal
         isOpen={showSupabaseModal}
         onClose={() => setShowSupabaseModal(false)}
+        initialTab={supabaseModalTab}
       />
 
       {/* Floating Quick Action Button */}

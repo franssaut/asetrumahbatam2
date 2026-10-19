@@ -17,7 +17,7 @@ interface LoginPageProps {
   currentUser: UserProfile | null;
   onLoginSuccess: (user: UserProfile) => void;
   onLogout: () => void;
-  onOpenSupabaseModal?: () => void;
+  onOpenSupabaseModal?: (tab?: 'config' | 'schema' | 'data' | 'resend') => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
@@ -990,12 +990,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="space-y-4">
                 {!forgotSent ? (
                   <form onSubmit={handleForgotSubmit} className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/60 text-blue-900 text-xs sm:text-sm leading-relaxed">
-                      <p className="font-bold flex items-center gap-1.5 text-sm text-[#0051d5] mb-1">
-                        <span className="material-symbols-outlined text-[18px]">lock_reset</span>
-                        Pemulihan Kata Sandi Akun
+                    <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/60 text-blue-900 text-xs sm:text-sm leading-relaxed space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold flex items-center gap-1.5 text-sm text-[#0051d5]">
+                          <span className="material-symbols-outlined text-[18px]">lock_reset</span>
+                          <span>Pemulihan Kata Sandi Akun</span>
+                        </p>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-[#0051d5] text-[10px] font-bold">
+                          <span>✉️</span> Resend SMTP
+                        </span>
+                      </div>
+                      <p>
+                        Masukkan alamat email akun Anda. Supabase Auth didukung infrastruktur <strong>Resend Email</strong> akan mengirimkan tautan aman ke kotak masuk Anda dalam hitungan detik.
                       </p>
-                      Masukkan alamat email akun Anda. Supabase Auth akan mengirimkan tautan aman ke kotak masuk email Anda untuk mengatur ulang kata sandi.
                     </div>
 
                     <div>
@@ -1044,6 +1051,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         Batal
                       </button>
                     </div>
+
+                    {onOpenSupabaseModal && (
+                      <div className="pt-1 flex items-center justify-between text-[11px] text-gray-500">
+                        <span>Pengiriman tanpa batas kuota via Resend</span>
+                        <button
+                          type="button"
+                          onClick={() => onOpenSupabaseModal('resend')}
+                          className="text-[#0051d5] hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <span>Panduan Resend SMTP</span>
+                          <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                        </button>
+                      </div>
+                    )}
                   </form>
                 ) : (
                   /* Kartu Sukses Pengiriman & Panel Resend */
@@ -1069,6 +1090,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           <span className="font-bold text-[#0e1c2f] truncate max-w-[220px]">{forgotEmail}</span>
                         </div>
                         <div className="flex justify-between items-center">
+                          <span className="text-gray-500">Infrastruktur Email:</span>
+                          <span className="font-bold text-[#0051d5] flex items-center gap-1">
+                            <span>⚡</span> Resend Delivery System
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
                           <span className="text-gray-500">Frekuensi Kirim:</span>
                           <span className="font-bold text-emerald-700 flex items-center gap-1">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1078,7 +1105,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       </div>
 
                       <p className="text-[11px] sm:text-xs text-emerald-800 leading-relaxed font-normal">
-                        Buka email dari <strong>Supabase / Aset Rumah Batam</strong> lalu klik tautan verifikasi untuk membuat kata sandi baru akun Anda.
+                        Buka email dari <strong>Supabase / Aset Rumah Batam</strong> lalu klik tautan verifikasi untuk membuat kata sandi baru akun Anda. Jika tidak muncul dalam 1 menit, cek folder Spam atau Promosi.
                       </p>
                     </div>
 
