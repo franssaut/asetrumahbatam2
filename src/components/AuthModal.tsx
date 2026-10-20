@@ -451,13 +451,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   errorMsg.toLowerCase().includes('rate limit') || 
                   errorMsg.toLowerCase().includes('limit exceeded') ||
                   errorMsg.toLowerCase().includes('testing emails') ||
-                  errorMsg.toLowerCase().includes('domain uji coba')) && (
+                  errorMsg.toLowerCase().includes('domain uji coba') ||
+                  errorMsg.toLowerCase().includes('api key')) && (
                   <div className="mt-3 p-3 rounded-xl bg-white/95 border border-amber-200 text-xs space-y-2 shadow-xs">
                     <p className="font-bold text-[#0e1c2f] flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-[16px] text-amber-500">info</span>
                       <span>Panduan Masalah Pengiriman Email:</span>
                     </p>
                     <ul className="list-disc list-inside space-y-1 text-gray-700 text-[11px] leading-relaxed">
+                      <li>
+                        <strong>Kunci API Tidak Valid:</strong> Buka <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/api-keys</a>, buat API Key baru (Full access), lalu simpan di pengaturan Resend.
+                      </li>
                       <li>
                         <strong>Mode Uji Coba Resend:</strong> Domain <code>onboarding@resend.dev</code> hanya diizinkan Resend mengirim email ke alamat akun pemilik Resend (<code>franssaut@gmail.com</code>).
                       </li>
@@ -479,7 +483,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         className="inline-flex items-center gap-1 bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer shadow-xs mt-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">settings</span>
-                        <span>Buka Pengaturan Resend SMTP</span>
+                        <span>Buka Pengaturan Resend &amp; Perbarui API Key</span>
                       </button>
                     )}
                   </div>

@@ -803,13 +803,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     errorMsg.toLowerCase().includes('rate limit') || 
                     errorMsg.toLowerCase().includes('limit exceeded') ||
                     errorMsg.toLowerCase().includes('testing emails') ||
-                    errorMsg.toLowerCase().includes('domain uji coba')) && (
+                    errorMsg.toLowerCase().includes('domain uji coba') ||
+                    errorMsg.toLowerCase().includes('api key')) && (
                     <div className="mt-3 p-3.5 rounded-xl bg-white/95 border border-amber-200 text-xs space-y-2.5 shadow-xs">
                       <p className="font-bold text-[#0e1c2f] flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[18px] text-amber-500">info</span>
                         <span>Panduan Pengiriman Email &amp; Solusi:</span>
                       </p>
                       <ul className="list-disc list-inside space-y-1.5 text-gray-700 text-[11px] leading-relaxed">
+                        <li>
+                          <strong>Kunci API Tidak Valid (API Key is Invalid):</strong> Buka <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/api-keys</a>, buat API Key baru (Permission: <em>Full access</em>), lalu simpan di menu pengaturan Resend.
+                        </li>
                         <li>
                           <strong>Mode Uji Coba Resend (Testing Domain):</strong> Domain gratis <code>onboarding@resend.dev</code> hanya diizinkan mengirim email ke email akun Resend Anda (<code>franssaut@gmail.com</code>).
                         </li>
@@ -818,9 +822,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         </li>
                         <li>
                           <strong>Kirim ke Semua Email Pengguna (Produksi):</strong> Daftarkan &amp; verifikasi domain Anda (misal: <code>asetrumahbatam.com</code>) di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a>, lalu ganti <em>Sender Email</em> di pengaturan Resend.
-                        </li>
-                        <li>
-                          <strong>Alternatif Supabase SMTP:</strong> Hubungkan Resend ke Supabase (Host: <code>smtp.resend.com</code>, Port: <code>465</code>, User: <code>resend</code>, Password: <code>API Key Resend</code>).
                         </li>
                       </ul>
 
@@ -832,7 +833,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                             className="inline-flex items-center gap-1.5 bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer transition-colors shadow-xs"
                           >
                             <span className="material-symbols-outlined text-[14px]">settings</span>
-                            <span>Buka Panduan &amp; Salin SMTP Resend</span>
+                            <span>Buka Pengaturan Resend &amp; Perbarui API Key</span>
                           </button>
                         </div>
                       )}

@@ -1014,12 +1014,22 @@ export async function resetPasswordForEmail(
       } else {
         // Resend gagal dikirim
         let resendErrMsg = resendResult.message;
+        const lowerMsg = resendErrMsg.toLowerCase();
+
         const isTestingRestriction = 
-          resendErrMsg.includes('testing emails to your own email address') ||
-          resendErrMsg.includes('resend.com/domains');
+          lowerMsg.includes('testing emails to your own email address') ||
+          lowerMsg.includes('resend.com/domains');
+
+        const isInvalidApiKey = 
+          lowerMsg.includes('api key is invalid') ||
+          lowerMsg.includes('invalid api key') ||
+          lowerMsg.includes('unauthorized') ||
+          lowerMsg.includes('not authorized');
 
         if (isTestingRestriction) {
           resendErrMsg = `Domain pengirim saat ini menggunakan domain uji coba Resend (onboarding@resend.dev). Resend membatasi mode uji coba hanya dapat mengirim ke email akun Resend Anda sendiri (franssaut@gmail.com).\n\n• Untuk menguji fitur lupa password sekarang: Mohon masukkan email franssaut@gmail.com.\n• Untuk mengirim ke email umum/klien lain: Daftarkan & verifikasi domain Anda di https://resend.com/domains lalu perbarui Sender Email di pengaturan.`;
+        } else if (isInvalidApiKey) {
+          resendErrMsg = `API Key Resend tidak valid atau telah kedaluwarsa/dihapus di Resend.com.\n\nLangkah perbaikan:\n1. Buka https://resend.com/api-keys\n2. Klik tombol "Create API Key" (beri nama & pilih "Full access")\n3. Salin key baru (diawali "re_...")\n4. Buka menu Pengaturan Resend di website ini dan simpan key baru tersebut.`;
         }
 
         // Coba fallback otomatis ke Supabase Auth jika ada
