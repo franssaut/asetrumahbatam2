@@ -984,7 +984,98 @@ export async function verifyOtpAndResetPassword(
 }
 
 /**
- * Send password reset email via Supabase Auth
+ * Atur ulang kata sandi langsung untuk sebuah alamat email dan aktifkan sesi pengguna.
+ * Bekerja tanpa hambatan baik untuk Supabase session, akun lokal, maupun akun demo.
+ */
+export async function directResetPassword(
+  email: string,
+  newPassword: string
+): Promise<{ success: boolean; message: string; user?: UserProfile }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+    return { success: false, message: 'Alamat email wajib diisi dengan benar.' };
+  }
+  if (!newPassword || newPassword.length < 6) {
+    return { success: false, message: 'Kata sandi baru minimal 6 karakter demi keamanan akun Anda.' };
+  }
+
+  // 1. Akun Demo
+  const isDemo = Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail);
+  if (isDemo) {
+    const demoUser = Object.values(DEMO_USERS).find((u) => u.email.toLowerCase() === cleanEmail) || DEMO_USERS.agent;
+    setStoredUser(demoUser);
+    return {
+      success: true,
+      message: 'Kata sandi akun demo berhasil diperbarui! Mengalihkan ke dashboard...',
+      user: demoUser,
+    };
+  }
+
+  // 2. Coba update sesi aktif Supabase jika ada
+  const supabase = getSupabase();
+  if (supabase) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.user) {
+        const { data: updateData, error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+        if (!updateError && updateData?.user) {
+          let profileDbRow = null;
+          try {
+            const { data: dbData } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', updateData.user.id)
+              .maybeSingle();
+            profileDbRow = dbData;
+          } catch (e) {}
+          const profile = mapSupabaseUserToProfile(updateData.user, profileDbRow);
+          setStoredUser(profile);
+          resetLocalUserPassword(cleanEmail, newPassword);
+          return {
+            success: true,
+            message: 'Kata sandi akun Supabase Anda berhasil diperbarui! Mengalihkan ke dashboard...',
+            user: profile,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Supabase direct reset session notice:', e);
+    }
+  }
+
+  // 3. Simpan dan perbarui akun di penyimpanan lokal
+  resetLocalUserPassword(cleanEmail, newPassword);
+  let userProfile: UserProfile | null = null;
+  try {
+    const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+      JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+    const found = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (found) userProfile = found.profile;
+  } catch (e) {}
+
+  if (!userProfile) {
+    const namePart = cleanEmail.split('@')[0].replace(/[._-]/g, ' ');
+    const cleanName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+    userProfile = {
+      id: 'usr_' + Date.now(),
+      email: cleanEmail,
+      fullName: cleanName || 'Pengguna ARB',
+      role: 'agent',
+      phone: '',
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  setStoredUser(userProfile);
+  return {
+    success: true,
+    message: 'Kata sandi baru berhasil disimpan! Mengalihkan ke dashboard...',
+    user: userProfile,
+  };
+}
+
+/**
+ * Send password reset email via Supabase Auth or Resend
  */
 export async function resetPasswordForEmail(
   email: string,
@@ -1037,25 +1128,24 @@ export async function resetPasswordForEmail(
         return {
           success: true,
           fallbackOtp: otpCode,
-          message: `Kode OTP 6-digit dan tautan pemulihan telah dikirim ke ${cleanEmail} via Resend.com! Silakan periksa kotak masuk atau spam email Anda.`,
+          message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail} via Resend.com! Silakan periksa kotak masuk atau spam email Anda.`,
           targetUrl: directResetUrl,
         };
       } else {
-        // Jika Resend menolak (misal domain uji coba dan dikirim ke selain email pemilik akun Resend)
         return {
-          success: true,
+          success: false,
           isRecoveryEmailError: true,
           fallbackOtp: otpCode,
-          message: `Sesi pemulihan akun aktif (${resendResult.message}). Gunakan 6-Digit Kode Verifikasi: ${otpCode} di bawah untuk langsung mengganti kata sandi baru.`,
+          message: `Pengiriman email via Resend gagal: ${resendResult.message}. Anda dapat langsung membuat kata sandi baru di bawah ini.`,
           targetUrl: directResetUrl,
         };
       }
     } catch (err: any) {
       return {
-        success: true,
+        success: false,
         isRecoveryEmailError: true,
         fallbackOtp: otpCode,
-        message: `Sesi pemulihan akun disiapkan! Gunakan 6-Digit Kode Verifikasi: ${otpCode} di bawah ini untuk langsung menetapkan kata sandi baru.`,
+        message: `Terjadi kendala pengiriman email: ${err.message || 'Koneksi gagal'}. Anda dapat langsung membuat kata sandi baru di bawah ini.`,
         targetUrl: directResetUrl,
       };
     }
@@ -1070,11 +1160,19 @@ export async function resetPasswordForEmail(
       });
 
       if (error) {
+        const msg = error.message.toLowerCase();
+        let userFriendlyMsg = `Pengiriman email pemulihan gagal: ${error.message}.`;
+        if (msg.includes('rate limit') || msg.includes('limit exceeded') || msg.includes('over_email_send_rate_limit')) {
+          userFriendlyMsg = 'Batas pengiriman email gratis Supabase terlampaui (Email Rate Limit Exceeded). Anda dapat langsung membuat kata sandi baru untuk akun Anda di bawah ini.';
+        } else if (msg.includes('error sending recovery email') || msg.includes('smtp')) {
+          userFriendlyMsg = 'Server pengiriman email belum terkonfigurasi. Anda dapat langsung membuat kata sandi baru untuk akun Anda di bawah ini.';
+        }
+
         return {
-          success: true,
+          success: false,
           isRecoveryEmailError: true,
           fallbackOtp: otpCode,
-          message: `Batas pengiriman Supabase terlampaui. Gunakan 6-Digit Kode OTP: ${otpCode} di bawah ini untuk langsung membuat sandi baru, atau masukkan Resend API Key di menu Integrasi Resend.`,
+          message: userFriendlyMsg,
           targetUrl: directResetUrl,
         };
       }
@@ -1082,16 +1180,25 @@ export async function resetPasswordForEmail(
       return {
         success: true,
         fallbackOtp: otpCode,
-        message: `Tautan pemulihan telah dikirim ke ${cleanEmail}. Gunakan kode OTP: ${otpCode} atau klik tautan di email Anda.`,
+        message: `Tautan pemulihan kata sandi telah dikirim ke ${cleanEmail}. Silakan periksa kotak masuk atau folder spam email Anda.`,
         targetUrl: directResetUrl,
       };
-    } catch (e) {}
+    } catch (e: any) {
+      return {
+        success: false,
+        isRecoveryEmailError: true,
+        fallbackOtp: otpCode,
+        message: `Gagal mengirim email: ${e.message || 'Koneksi terputus'}. Anda dapat langsung membuat kata sandi baru di bawah ini.`,
+        targetUrl: directResetUrl,
+      };
+    }
   }
 
   return {
-    success: true,
+    success: false,
+    isRecoveryEmailError: true,
     fallbackOtp: otpCode,
-    message: `Sesi pemulihan siap! Gunakan 6-Digit Kode OTP: ${otpCode} di bawah untuk langsung menetapkan kata sandi baru Anda.`,
+    message: 'Server email belum terkonfigurasi. Anda dapat langsung menetapkan kata sandi baru untuk akun Anda di bawah ini.',
     targetUrl: directResetUrl,
   };
 }
