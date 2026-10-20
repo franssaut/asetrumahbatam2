@@ -9,7 +9,6 @@ import {
   resendConfirmationEmail,
   checkEmailExists,
   isLocalRegisteredEmail,
-  resetLocalUserPassword,
   updateUserPassword,
   activateRecoverySessionFromUrl,
   verifyOtpAndResetPassword,
@@ -62,8 +61,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [forgotSent, setForgotSent] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
   const [resendCount, setResendCount] = useState(1);
-  const [instantLocalPassword, setInstantLocalPassword] = useState('');
-  const [showInstantLocalPassword, setShowInstantLocalPassword] = useState(false);
 
   // Direct OTP Code Verification Form State (Verifikasi 6-Digit Tanpa Butuh Redirect URL)
   const [otpCode, setOtpCode] = useState('');
@@ -804,79 +801,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   {(errorMsg.toLowerCase().includes('recovery email') || 
                     errorMsg.toLowerCase().includes('resend') || 
                     errorMsg.toLowerCase().includes('rate limit') || 
-                    errorMsg.toLowerCase().includes('limit exceeded')) && (
-                    <div className="mt-3 p-3.5 rounded-xl bg-white/90 border border-rose-200/90 text-xs space-y-2.5">
-                      <p className="font-bold text-rose-950 flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[16px] text-amber-600">lightbulb</span>
-                        <span>Penyebab Masalah Pengiriman Email &amp; Solusi:</span>
+                    errorMsg.toLowerCase().includes('limit exceeded') ||
+                    errorMsg.toLowerCase().includes('testing emails') ||
+                    errorMsg.toLowerCase().includes('domain uji coba')) && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-white/95 border border-amber-200 text-xs space-y-2.5 shadow-xs">
+                      <p className="font-bold text-[#0e1c2f] flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px] text-amber-500">info</span>
+                        <span>Panduan Pengiriman Email &amp; Solusi:</span>
                       </p>
-                      <ul className="list-disc list-inside space-y-1 text-rose-900 text-[11px] leading-relaxed">
+                      <ul className="list-disc list-inside space-y-1.5 text-gray-700 text-[11px] leading-relaxed">
                         <li>
-                          <strong>Batas Kecepatan (Email Rate Limit Exceeded):</strong> Supabase membatasi pengiriman email ke alamat yang sama maksimal 1x per 60 detik untuk mencegah spam. Mohon beri jeda 1 menit jika ingin mengirim ulang.
+                          <strong>Mode Uji Coba Resend (Testing Domain):</strong> Domain gratis <code>onboarding@resend.dev</code> hanya diizinkan mengirim email ke email akun Resend Anda (<code>franssaut@gmail.com</code>).
                         </li>
                         <li>
-                          <strong>Akun Uji Coba Resend:</strong> Domain gratis <code>onboarding@resend.dev</code> hanya diizinkan mengirim ke email akun Resend Anda sendiri.
+                          <strong>Uji Coba Sekarang:</strong> Masukkan <strong>franssaut@gmail.com</strong> pada form Lupa Password di atas untuk menerima 6-digit OTP langsung ke inbox.
                         </li>
                         <li>
-                          <strong>Pengaturan SMTP Supabase:</strong> Host: <code>smtp.resend.com</code>, Port: <code>465</code>, User: <code>resend</code> (huruf kecil semua!), Password: API Key Resend (<code>re_...</code>).
+                          <strong>Kirim ke Semua Email Pengguna (Produksi):</strong> Daftarkan &amp; verifikasi domain Anda (misal: <code>asetrumahbatam.com</code>) di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a>, lalu ganti <em>Sender Email</em> di pengaturan Resend.
+                        </li>
+                        <li>
+                          <strong>Alternatif Supabase SMTP:</strong> Hubungkan Resend ke Supabase (Host: <code>smtp.resend.com</code>, Port: <code>465</code>, User: <code>resend</code>, Password: <code>API Key Resend</code>).
                         </li>
                       </ul>
-                      {/* Form Solusi Instan di Dalam Kotak Error */}
-                      <div className="mt-2.5 p-3.5 rounded-xl bg-amber-50/95 border-2 border-amber-300 space-y-2">
-                        <div className="flex items-center gap-1.5 text-amber-950 font-bold text-xs sm:text-sm">
-                          <span className="material-symbols-outlined text-[18px] text-amber-600">bolt</span>
-                          <span>Solusi Paling Cepat: Atur Sandi Baru Sekarang (Tanpa Email)</span>
-                        </div>
-                        <p className="text-[11px] text-amber-900 leading-relaxed">
-                          Tidak perlu menunggu email atau memperbaiki SMTP sekarang. Anda dapat langsung menetapkan kata sandi baru untuk <strong>{forgotEmail || loginEmail || 'akun Anda'}</strong>:
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                          <input
-                            type={showInstantLocalPassword ? 'text' : 'password'}
-                            placeholder="Ketik kata sandi baru (min. 6 karakter)"
-                            value={instantLocalPassword}
-                            onChange={(e) => setInstantLocalPassword(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-white rounded-xl border border-amber-300 text-xs text-[#0e1c2f] font-medium outline-none focus:ring-2 focus:ring-[#0051d5]"
-                          />
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setShowInstantLocalPassword(!showInstantLocalPassword)}
-                              className="px-2.5 py-2 text-gray-700 hover:text-black text-[11px] font-bold bg-white rounded-xl border border-gray-300 cursor-pointer"
-                            >
-                              {showInstantLocalPassword ? 'Tutup' : 'Lihat'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!instantLocalPassword || instantLocalPassword.length < 6}
-                              onClick={() => {
-                                const target = forgotEmail.trim() || loginEmail.trim();
-                                if (!target) {
-                                  setErrorMsg('Mohon isi alamat email terlebih dahulu.');
-                                  return;
-                                }
-                                const resetRes = resetLocalUserPassword(target, instantLocalPassword);
-                                if (resetRes.success) {
-                                  setSuccessMsg(resetRes.message);
-                                  setErrorMsg(null);
-                                  setLoginEmail(target);
-                                  setLoginPassword(instantLocalPassword);
-                                  setTimeout(() => handleSwitchTab('login'), 1200);
-                                } else {
-                                  setErrorMsg(resetRes.message);
-                                }
-                              }}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs shrink-0 flex items-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                              <span>Simpan Sandi &amp; Masuk</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
 
                       {onOpenSupabaseModal && (
-                        <div className="pt-1 flex flex-wrap items-center gap-2">
+                        <div className="pt-1">
                           <button
                             type="button"
                             onClick={() => onOpenSupabaseModal('resend')}

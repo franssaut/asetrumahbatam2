@@ -1012,15 +1012,63 @@ export async function resetPasswordForEmail(
           targetUrl: directResetUrl,
         };
       } else {
+        // Resend gagal dikirim
+        let resendErrMsg = resendResult.message;
+        const isTestingRestriction = 
+          resendErrMsg.includes('testing emails to your own email address') ||
+          resendErrMsg.includes('resend.com/domains');
+
+        if (isTestingRestriction) {
+          resendErrMsg = `Domain pengirim saat ini menggunakan domain uji coba Resend (onboarding@resend.dev). Resend membatasi mode uji coba hanya dapat mengirim ke email akun Resend Anda sendiri (franssaut@gmail.com).\n\n• Untuk menguji fitur lupa password sekarang: Mohon masukkan email franssaut@gmail.com.\n• Untuk mengirim ke email umum/klien lain: Daftarkan & verifikasi domain Anda di https://resend.com/domains lalu perbarui Sender Email di pengaturan.`;
+        }
+
+        // Coba fallback otomatis ke Supabase Auth jika ada
+        const supabase = getSupabase();
+        if (supabase) {
+          try {
+            const { error: sbError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+              redirectTo: directResetUrl,
+            });
+            if (!sbError) {
+              return {
+                success: true,
+                fallbackOtp: otpCode,
+                message: `Tautan dan kode verifikasi telah dikirim ke ${cleanEmail} via Supabase! Silakan periksa kotak masuk atau spam email Anda.`,
+                targetUrl: directResetUrl,
+              };
+            }
+          } catch (e) {
+            console.warn('Supabase fallback notice:', e);
+          }
+        }
+
         return {
           success: false,
           isRecoveryEmailError: true,
           fallbackOtp: otpCode,
-          message: `Pengiriman email via Resend gagal: ${resendResult.message}. Silakan periksa API Key Resend Anda atau coba sesaat lagi.`,
+          message: resendErrMsg,
           targetUrl: directResetUrl,
         };
       }
     } catch (err: any) {
+      // Fallback ke Supabase jika Resend mengalami error koneksi
+      const supabase = getSupabase();
+      if (supabase) {
+        try {
+          const { error: sbError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+            redirectTo: directResetUrl,
+          });
+          if (!sbError) {
+            return {
+              success: true,
+              fallbackOtp: otpCode,
+              message: `Tautan dan kode verifikasi telah dikirim ke ${cleanEmail} via Supabase! Silakan periksa kotak masuk atau spam email Anda.`,
+              targetUrl: directResetUrl,
+            };
+          }
+        } catch (e) {}
+      }
+
       return {
         success: false,
         isRecoveryEmailError: true,

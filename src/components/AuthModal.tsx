@@ -8,7 +8,6 @@ import {
   resendConfirmationEmail,
   checkEmailExists,
   isLocalRegisteredEmail,
-  resetLocalUserPassword,
   getAuthRedirectBaseUrl,
   activateRecoverySessionFromUrl,
   verifyOtpAndResetPassword
@@ -450,56 +449,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {(errorMsg.toLowerCase().includes('recovery email') || 
                   errorMsg.toLowerCase().includes('resend') || 
                   errorMsg.toLowerCase().includes('rate limit') || 
-                  errorMsg.toLowerCase().includes('limit exceeded')) && (
-                  <div className="mt-3 p-3 rounded-xl bg-white/90 border border-red-200/90 text-xs space-y-2">
-                    <p className="font-bold text-red-950 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[16px] text-amber-600">lightbulb</span>
-                      <span>Petunjuk Masalah Email &amp; Rate Limit:</span>
+                  errorMsg.toLowerCase().includes('limit exceeded') ||
+                  errorMsg.toLowerCase().includes('testing emails') ||
+                  errorMsg.toLowerCase().includes('domain uji coba')) && (
+                  <div className="mt-3 p-3 rounded-xl bg-white/95 border border-amber-200 text-xs space-y-2 shadow-xs">
+                    <p className="font-bold text-[#0e1c2f] flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-amber-500">info</span>
+                      <span>Panduan Masalah Pengiriman Email:</span>
                     </p>
-                    <p className="text-[11px] text-red-900 leading-relaxed">
-                      Supabase membatasi pengiriman email maksimal 1x per 60 detik (Rate Limit Exceeded). Jika domain masih <code>onboarding@resend.dev</code>, email hanya terkirim ke akun pemilik Resend. Anda bisa langsung membuat sandi baru di bawah ini:
-                    </p>
-                    
-                    {/* Form Darurat: Reset Sandi Langsung */}
-                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 space-y-1.5">
-                      <p className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px] text-amber-600">bolt</span>
-                        <span>Solusi Instan: Atur Sandi Baru Tanpa Email</span>
-                      </p>
-                      <div className="flex gap-1.5">
-                        <input
-                          type={showInstantLocalPassword ? 'text' : 'password'}
-                          placeholder="Kata sandi baru (min. 6 kar)"
-                          value={instantLocalPassword}
-                          onChange={(e) => setInstantLocalPassword(e.target.value)}
-                          className="flex-1 px-2.5 py-1.5 bg-white rounded-lg border border-amber-300 text-xs text-[#0e1c2f] outline-none"
-                        />
-                        <button
-                          type="button"
-                          disabled={!instantLocalPassword || instantLocalPassword.length < 6}
-                          onClick={() => {
-                            const target = forgotEmail.trim() || loginEmail.trim();
-                            if (!target) {
-                              setErrorMsg('Mohon isi alamat email terlebih dahulu.');
-                              return;
-                            }
-                            const resetRes = resetLocalUserPassword(target, instantLocalPassword);
-                            if (resetRes.success) {
-                              setSuccessMsg(resetRes.message);
-                              setErrorMsg(null);
-                              setLoginEmail(target);
-                              setLoginPassword(instantLocalPassword);
-                              setTimeout(() => setActiveTab('login'), 1200);
-                            } else {
-                              setErrorMsg(resetRes.message);
-                            }
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-xs shrink-0"
-                        >
-                          Simpan Sandi
-                        </button>
-                      </div>
-                    </div>
+                    <ul className="list-disc list-inside space-y-1 text-gray-700 text-[11px] leading-relaxed">
+                      <li>
+                        <strong>Mode Uji Coba Resend:</strong> Domain <code>onboarding@resend.dev</code> hanya diizinkan Resend mengirim email ke alamat akun pemilik Resend (<code>franssaut@gmail.com</code>).
+                      </li>
+                      <li>
+                        <strong>Uji Coba:</strong> Masukkan <strong>franssaut@gmail.com</strong> pada form untuk menerima 6-digit OTP.
+                      </li>
+                      <li>
+                        <strong>Kirim ke Semua Email:</strong> Daftarkan domain Anda di <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#0051d5]">resend.com/domains</a> dan ubah Sender Email di pengaturan.
+                      </li>
+                    </ul>
 
                     {onOpenSupabaseModal && (
                       <button
@@ -508,7 +476,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           onOpenSupabaseModal('resend');
                           setErrorMsg(null);
                         }}
-                        className="inline-flex items-center gap-1 bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer shadow-xs"
+                        className="inline-flex items-center gap-1 bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer shadow-xs mt-1"
                       >
                         <span className="material-symbols-outlined text-[14px]">settings</span>
                         <span>Buka Pengaturan Resend SMTP</span>
