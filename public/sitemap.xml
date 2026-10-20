@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+  
+  <!-- Halaman Utama -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Katalog Properti Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/katalog-properti</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Panduan Legalitas & Tarif UWTO BP Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/panduan-legalitas-uwto</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Konsultasi Agen & Notaris Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/konsultasi-agen</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Profil Perusahaan Broker Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/tentang-kami</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Titip Jual & Sewa Properti Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/titip-properti</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Pusat FAQ & Bantuan Hukum Agraria Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/faq-bantuan</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Listing Properti Pilihan Batam -->
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/sukajadi-golf-villa</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/nongsa-waterfront-resort</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/nagoya-thamrin-ruko</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/orchard-park-luxury</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/harbour-bay-penthouse</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/kabil-logistics-warehouse</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/central-hills-autumn</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/palm-springs-mansion</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/royal-grande-modern</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/tiban-mas-residence</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/southlink-golf-estate</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/dutamas-residence-batam</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/cipta-green-ville-marina</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/nuvasa-bay-the-nove</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://asetrumahbatam2.vercel.app/properti/sukajadi-central-raya-mansion</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+</urlset>

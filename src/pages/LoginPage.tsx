@@ -1255,7 +1255,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         )}
                       </div>
                       <p>
-                        Masukkan alamat email akun Anda. Supabase Auth didukung infrastruktur <strong>Resend Email</strong> akan mengirimkan tautan aman dan <strong>6-digit kode OTP</strong> ke kotak masuk Anda.
+                        Masukkan alamat email akun Anda. Tautan pemulihan kata sandi yang aman akan dikirimkan langsung ke kotak masuk email Anda.
                       </p>
                     </div>
 
@@ -1293,7 +1293,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         ) : (
                           <>
                             <span className="material-symbols-outlined text-[18px]">send</span>
-                            <span>Kirim Tautan &amp; Kode OTP</span>
+                            <span>Kirim Tautan Pemulihan</span>
                           </>
                         )}
                       </button>

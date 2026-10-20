@@ -12,6 +12,12 @@ import {
   getPropertyPath, 
   PAGE_PATHS 
 } from './lib/navigation';
+import { 
+  applyPageSEO, 
+  PAGE_SEO_METADATA, 
+  getPropertySEO, 
+  getFaqPageJsonLd 
+} from './lib/seo';
 
 import { BerandaPage } from './pages/BerandaPage';
 import { KatalogPropertiPage } from './pages/KatalogPropertiPage';
@@ -48,7 +54,7 @@ export default function App() {
 
     const handlePasswordRecovery = () => {
       setCurrentPage('login');
-      document.title = 'Setel Kata Sandi Baru | Aset Rumah Batam';
+      updatePageSEO('login');
     };
 
     window.addEventListener('arb_auth_changed', handleAuthChange);
@@ -63,6 +69,19 @@ export default function App() {
       unsubscribeSupabase();
     };
   }, []);
+
+  // Update dynamic document head & Open Graph / Schema SEO
+  const updatePageSEO = (page: PageId, property?: PropertyItem | null) => {
+    if (page === 'detail-properti' && property) {
+      applyPageSEO(getPropertySEO(property));
+      return;
+    }
+    const config = { ...PAGE_SEO_METADATA[page] };
+    if (page === 'faq-bantuan') {
+      config.jsonLd = getFaqPageJsonLd();
+    }
+    applyPageSEO(config);
+  };
 
   // Load properties from Supabase & synchronize route
   useEffect(() => {
@@ -80,9 +99,9 @@ export default function App() {
         setCurrentPage(route.page);
         if (route.property) {
           setSelectedProperty(route.property);
-          document.title = `${route.property.title} | Aset Rumah Batam`;
+          updatePageSEO('detail-properti', route.property);
         } else {
-          updatePageTitle(route.page);
+          updatePageSEO(route.page);
         }
       } catch (e) {
         console.warn('Error loading initial Supabase properties:', e);
@@ -99,9 +118,9 @@ export default function App() {
         setCurrentPage(route.page);
         if (route.property) {
           setSelectedProperty(route.property);
-          document.title = `${route.property.title} | Aset Rumah Batam`;
+          updatePageSEO('detail-properti', route.property);
         } else {
-          updatePageTitle(route.page);
+          updatePageSEO(route.page);
         }
         return currentProps;
       });
@@ -114,29 +133,13 @@ export default function App() {
     };
   }, []);
 
-  const updatePageTitle = (page: PageId) => {
-    const titles: Record<PageId, string> = {
-      'beranda': 'Aset Rumah Batam | Broker Properti Mewah & Legalitas UWTO Resmi',
-      'katalog-properti': 'Katalog Properti Pilihan Batam | Aset Rumah Batam',
-      'detail-properti': 'Detail Properti | Aset Rumah Batam',
-      'panduan-legalitas-uwto': 'Panduan Siklus UWTO BP Batam & Hak Pakai WNA | Aset Rumah Batam',
-      'konsultasi-agen': 'Konsultasi Agen & Legalitas Properti Batam | Aset Rumah Batam',
-      'tentang-kami': 'Tentang Kami | Broker Terakreditasi Batam',
-      'titip-properti': 'Titip Jual & Sewa Properti Batam | Aset Rumah Batam',
-      'faq-bantuan': 'Pusat FAQ & Bantuan Legal Properti Batam',
-      'dashboard-user': 'Dashboard Pengguna & Properti Favorit | Aset Rumah Batam',
-      'login': 'Masuk & Daftar Akun Agent | Aset Rumah Batam',
-    };
-    document.title = titles[page] || 'Aset Rumah Batam';
-  };
-
   const handleNavigate = (page: PageId) => {
     setCurrentPage(page);
     const targetPath = PAGE_PATHS[page] || '/';
     if (window.location.pathname !== targetPath) {
       window.history.pushState(null, '', targetPath);
     }
-    updatePageTitle(page);
+    updatePageSEO(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -147,7 +150,7 @@ export default function App() {
     if (window.location.pathname !== targetPath) {
       window.history.pushState(null, '', targetPath);
     }
-    document.title = `${property.title} | Aset Rumah Batam`;
+    updatePageSEO('detail-properti', property);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

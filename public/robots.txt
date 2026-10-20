@@ -1,0 +1,18 @@
+# Robots.txt for Aset Rumah Batam (asetrumahbatam2.vercel.app)
+User-agent: *
+Allow: /
+Allow: /katalog-properti
+Allow: /properti/
+Allow: /panduan-legalitas-uwto
+Allow: /konsultasi-agen
+Allow: /tentang-kami
+Allow: /titip-properti
+Allow: /faq-bantuan
+
+# Disallow private user/admin/session areas
+Disallow: /dashboard
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://asetrumahbatam2.vercel.app/sitemap.xml
+Host: https://asetrumahbatam2.vercel.app

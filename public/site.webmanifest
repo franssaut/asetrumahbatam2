@@ -1,0 +1,17 @@
+{
+  "name": "Aset Rumah Batam - Broker Real Estat & Legalitas UWTO",
+  "short_name": "Aset Rumah Batam",
+  "description": "Platform broker real estat terpercaya di Batam untuk jual beli hunian mewah, ruko komersial, villa, dan tanah dengan pendampingan legalitas UWTO BP Batam resmi.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0051d5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
