@@ -51,6 +51,7 @@ export default defineConfig(() => {
                 }
 
                 const sender = from || 'Aset Rumah Batam <onboarding@resend.dev>';
+                console.log(`[Resend Dev] Mengirim email ke: ${to} | Dari: ${sender} | Subjek: ${subject}`);
                 const resendRes = await fetch('https://api.resend.com/emails', {
                   method: 'POST',
                   headers: {
@@ -67,9 +68,11 @@ export default defineConfig(() => {
                 });
 
                 const data = await resendRes.json();
+                console.log(`[Resend Dev] Respon status: ${resendRes.status}`, data);
                 res.writeHead(resendRes.status, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(data));
               } catch (err: any) {
+                console.error('[Resend Dev] Error:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, message: err.message }));
               }

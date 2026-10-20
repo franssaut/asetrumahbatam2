@@ -54,6 +54,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const sender = from || 'Aset Rumah Batam <onboarding@resend.dev>';
+    console.log(`[Resend Vercel API] Mengirim email ke: ${to} | Dari: ${sender} | Subjek: ${subject}`);
 
     // Kirim request ke Resend REST API
     const resendResponse = await fetch('https://api.resend.com/emails', {
@@ -72,6 +73,7 @@ export default async function handler(req: any, res: any) {
     });
 
     const data = await resendResponse.json();
+    console.log(`[Resend Vercel API] Respon status: ${resendResponse.status}`, data);
 
     if (!resendResponse.ok) {
       return res.status(resendResponse.status).json({
