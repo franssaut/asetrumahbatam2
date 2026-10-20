@@ -6,7 +6,6 @@ import {
   signUpWithEmail, 
   demoLogin, 
   resetPasswordForEmail, 
-  directResetPassword,
   resendConfirmationEmail,
   checkEmailExists,
   isLocalRegisteredEmail,
@@ -289,57 +288,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
-  // 3. Handle Direct Password Reset (Atur Kata Sandi Baru Langsung & Masuk)
-  const handleDirectResetSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    handleClearAlerts();
-
-    const cleanEmail = (forgotEmail || loginEmail).trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      setErrorMsg('Mohon masukkan alamat email akun Anda yang valid.');
-      return;
-    }
-
-    if (!newPassword || newPassword.length < 6) {
-      setErrorMsg('Kata sandi baru minimal 6 karakter demi keamanan akun Anda.');
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setErrorMsg('Konfirmasi kata sandi baru tidak cocok. Mohon periksa kembali.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await directResetPassword(cleanEmail, newPassword);
-      if (res.success && res.user) {
-        setSuccessMsg(res.message);
-        setTimeout(() => {
-          onLoginSuccess(res.user!);
-        }, 800);
-      } else {
-        setErrorMsg(res.message || 'Gagal mengatur ulang kata sandi.');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Terjadi gangguan saat memproses kata sandi baru.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 3b. Handle Forgot Password Email (Kirim Tautan Pemulihan via Email)
+  // 3. Handle Forgot Password Email (Kirim Kode Verifikasi ke Email)
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     handleClearAlerts();
 
     const targetEmail = (forgotEmail || loginEmail).trim().toLowerCase();
     if (!targetEmail || !targetEmail.includes('@') || !targetEmail.includes('.')) {
-      setErrorMsg('Mohon masukkan alamat email yang valid.');
+      setErrorMsg('Mohon masukkan format alamat email yang valid.');
       return;
     }
 
-    setResending(true);
+    setLoading(true);
     try {
       const res = await resetPasswordForEmail(targetEmail, activeSiteUrl);
       if (res.success) {
@@ -353,11 +313,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     } catch (err: any) {
       setErrorMsg(err.message || 'Gagal mengirim email reset kata sandi.');
     } finally {
-      setResending(false);
+      setLoading(false);
     }
   };
 
-  // 4. Handle Resend Forgot Password Email (Kirim Ulang Tautan)
+  // 4. Handle Resend Forgot Password Email (Kirim Ulang Kode)
   const handleResendForgot = async () => {
     if (resendCountdown > 0 || resending) return;
     const targetEmail = (forgotEmail || loginEmail).trim().toLowerCase();
@@ -378,13 +338,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         setErrorMsg(res.message);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal mengirim ulang tautan reset kata sandi.');
+      setErrorMsg(err.message || 'Gagal mengirim ulang kode verifikasi.');
     } finally {
       setResending(false);
     }
   };
 
-  // 4b. Handle Manual Token/URL Paste Recovery (Solusi instan jika link email nyasar ke localhost)
+  // 4b. Handle Manual Token/URL Paste Recovery (Solusi jika link email disalin manual)
   const handleActivateManualRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recoveryInputUrl.trim()) {
@@ -410,7 +370,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
-  // 4c. Handle Direct 6-Digit OTP / Token Verification (Jika ada OTP)
+  // 4c. Handle Direct 6-Digit OTP Verification & Set New Password (Aman & Wajib Verifikasi)
   const handleVerifyOtpAndReset = async (e: React.FormEvent) => {
     e.preventDefault();
     handleClearAlerts();
@@ -423,15 +383,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
     if (!cleanOtp) {
-      setErrorMsg('Mohon masukkan 6-digit kode OTP atau token dari email Anda.');
+      setErrorMsg('6-digit kode verifikasi (OTP) dari email wajib diisi demi keamanan akun.');
+      return;
+    }
+    if (cleanOtp.length < 6) {
+      setErrorMsg('Kode verifikasi harus berupa 6 angka.');
       return;
     }
     if (!otpNewPassword || otpNewPassword.length < 6) {
-      setErrorMsg('Kata sandi baru minimal 6 karakter.');
+      setErrorMsg('Kata sandi baru minimal 6 karakter demi keamanan akun Anda.');
       return;
     }
     if (otpNewPassword !== otpConfirmPassword) {
-      setErrorMsg('Konfirmasi kata sandi baru tidak sesuai. Mohon periksa kembali.');
+      setErrorMsg('Konfirmasi kata sandi baru tidak cocok. Mohon periksa kembali.');
       return;
     }
 
@@ -463,14 +427,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
-  // 5. Handle Set New Password Submit (Simpan Kata Sandi Baru dengan Supabase/Direct)
+  // 5. Handle Set New Password Submit (Dari Tautan Email / URL Recovery)
   const handleSetNewPasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     handleClearAlerts();
 
     const cleanEmail = (forgotEmail || loginEmail).trim().toLowerCase();
     if (!newPassword || newPassword.length < 6) {
-      setErrorMsg('Kata sandi baru minimal 6 karakter.');
+      setErrorMsg('Kata sandi baru minimal 6 karakter demi keamanan akun Anda.');
       return;
     }
 
@@ -481,9 +445,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setLoading(true);
     try {
-      // 1. Jika ada email & kode OTP, verifikasi OTP
+      // 1. Jika ada kode OTP dari URL atau input
       if (cleanEmail && otpCode.trim()) {
-        const otpRes = await verifyOtpAndResetPassword(cleanEmail, otpCode, newPassword);
+        const otpRes = await verifyOtpAndResetPassword(cleanEmail, otpCode.trim(), newPassword);
         if (otpRes.success) {
           setSuccessMsg(otpRes.message);
           setTimeout(() => {
@@ -495,10 +459,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             }
           }, 800);
           return;
+        } else {
+          setErrorMsg(otpRes.message);
+          return;
         }
       }
 
-      // 2. Coba perbarui via sesi aktif Supabase
+      // 2. Coba perbarui via sesi pemulihan aktif Supabase (jika membuka tautan reset dari email)
       const res = await updateUserPassword(newPassword);
       if (res.success) {
         setSuccessMsg(res.message || 'Kata sandi berhasil diperbarui! Mengalihkan ke dashboard...');
@@ -513,32 +480,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         return;
       }
 
-      // 3. Fallback direct reset jika email diketahui
-      if (cleanEmail) {
-        const directRes = await directResetPassword(cleanEmail, newPassword);
-        if (directRes.success && directRes.user) {
-          setSuccessMsg(directRes.message);
-          setTimeout(() => {
-            onLoginSuccess(directRes.user!);
-          }, 800);
-          return;
-        }
-      }
-
-      setErrorMsg(res.message || 'Gagal mengubah kata sandi. Pastikan Anda memasukkan email akun yang sesuai.');
+      setErrorMsg('Sesi verifikasi tidak ditemukan atau telah kadaluarsa. Demi keamanan, silakan ajukan permintaan lupa sandi kembali untuk menerima kode verifikasi baru.');
     } catch (err: any) {
-      if (cleanEmail) {
-        try {
-          const directRes = await directResetPassword(cleanEmail, newPassword);
-          if (directRes.success && directRes.user) {
-            setSuccessMsg(directRes.message);
-            setTimeout(() => {
-              onLoginSuccess(directRes.user!);
-            }, 800);
-            return;
-          }
-        } catch (e) {}
-      }
       setErrorMsg(err.message || 'Terjadi kesalahan sistem saat memperbarui kata sandi.');
     } finally {
       setLoading(false);
@@ -1273,209 +1216,285 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </form>
             )}
 
-            {/* TAB 3: PEMULIHAN SANDI (LUPA SANDI INSTAN & EMAIL) */}
+            {/* TAB 3: PEMULIHAN SANDI (LUPA SANDI DENGAN VERIFIKASI EMAIL/OTP) */}
             {activeTab === 'forgot' && (
               <div className="space-y-4 animate-in fade-in">
-                {/* Info Card */}
-                <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/60 text-blue-900 text-xs sm:text-sm leading-relaxed space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold flex items-center gap-1.5 text-sm text-[#0051d5]">
-                      <span className="material-symbols-outlined text-[18px]">lock_reset</span>
-                      <span>Pemulihan Kata Sandi Akun</span>
-                    </p>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                      <span className="material-symbols-outlined text-[12px]">bolt</span>
-                      <span>Instan &amp; Mandiri</span>
-                    </span>
-                  </div>
-                  <p className="text-[12px] text-blue-800/90">
-                    Masukkan email akun Anda dan tentukan kata sandi baru. Sistem akan langsung memperbarui kata sandi Anda dan mengarahkan Anda ke Dashboard tanpa perlu menunggu antrian email.
-                  </p>
-                </div>
-
-                {/* FORM UTAMA: ATUR KATA SANDI BARU SECARA LANGSUNG */}
-                <form onSubmit={handleDirectResetSubmit} className="space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
-                      Alamat Email Akun Terdaftar
-                    </label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
-                        mail
-                      </span>
-                      <input
-                        type="email"
-                        required
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="contoh: agent@asetrumahbatam.com"
-                        className="w-full pl-10 pr-4 py-2.5 sm:py-3 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
-                      Kata Sandi Baru (Minimal 6 Karakter)
-                    </label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
-                        lock
-                      </span>
-                      <input
-                        type={showNewPassword ? 'text' : 'password'}
-                        required
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Masukkan kata sandi baru"
-                        className="w-full pl-10 pr-10 py-2.5 sm:py-3 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          {showNewPassword ? 'visibility_off' : 'visibility'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
-                      Konfirmasi Kata Sandi Baru
-                    </label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
-                        lock_reset
-                      </span>
-                      <input
-                        type={showConfirmNewPassword ? 'text' : 'password'}
-                        required
-                        value={confirmNewPassword}
-                        onChange={(e) => setConfirmNewPassword(e.target.value)}
-                        placeholder="Ketik ulang kata sandi baru"
-                        className="w-full pl-10 pr-10 py-2.5 sm:py-3 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">
-                          {showConfirmNewPassword ? 'visibility_off' : 'visibility'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-1 py-3 px-4 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] active:scale-98 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      {loading ? (
-                        <>
-                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                          <span>Menyimpan Sandi...</span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                          <span>Simpan Sandi &amp; Masuk ke Dashboard</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchTab('login')}
-                      className="py-3 px-4 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
-                    >
-                      Batal
-                    </button>
-                  </div>
-                </form>
-
-                {/* OPSI ALTERNATIF: KIRIM TAUTAN PEMULIHAN KE EMAIL */}
-                <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-gray-500">
-                      Ingin tautan dikirim ke kotak masuk email?
-                    </span>
-                    {resendCountdown > 0 && (
-                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                        Cooldown: {resendCountdown}s
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={resending || resendCountdown > 0 || !forgotEmail.trim()}
-                    onClick={handleForgotSubmit}
-                    className={`w-full py-2.5 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                      resendCountdown > 0 || resending || !forgotEmail.trim()
-                        ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-300 shadow-2xs hover:border-[#0051d5] hover:text-[#0051d5]'
-                    }`}
-                  >
-                    <span className={`material-symbols-outlined text-[16px] ${resending ? 'animate-spin' : ''}`}>
-                      {resending ? 'progress_activity' : 'forward_to_inbox'}
-                    </span>
-                    <span>
-                      {resending
-                        ? 'Mengirim Tautan ke Email...'
-                        : resendCountdown > 0
-                        ? `Tautan Terkirim (${resendCountdown}s)`
-                        : 'Kirim Tautan Pemulihan ke Email'}
-                    </span>
-                  </button>
-
-                  {/* Manual link / token paste accordion */}
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setShowRecoveryPaste(!showRecoveryPaste)}
-                      className="w-full flex items-center justify-between text-[11px] text-gray-500 hover:text-[#0051d5] font-medium transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px]">link</span>
-                        <span>Punya link pemulihan email yang ingin ditempel manual?</span>
-                      </span>
-                      <span className="material-symbols-outlined text-[16px]">
-                        {showRecoveryPaste ? 'expand_less' : 'expand_more'}
-                      </span>
-                    </button>
-
-                    {showRecoveryPaste && (
-                      <div className="mt-2 p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-2 animate-in fade-in">
-                        <p className="text-[10px] text-gray-500">
-                          Salin seluruh tautan dari tombol email lalu tempel di sini untuk mengaktifkan sesi pemulihan:
+                {!forgotSent ? (
+                  /* TAHAP 1: FORMULIR REQUEST KODE PEMULIHAN */
+                  <form onSubmit={handleForgotSubmit} className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/60 text-blue-900 text-xs sm:text-sm leading-relaxed space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold flex items-center gap-1.5 text-sm text-[#0051d5]">
+                          <span className="material-symbols-outlined text-[18px]">lock_reset</span>
+                          <span>Pemulihan Kata Sandi Akun</span>
                         </p>
-                        <div className="flex gap-2">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-100 text-[#0051d5] text-[10px] font-bold">
+                          <span className="material-symbols-outlined text-[13px]">verified_user</span>
+                          <span>Verifikasi Email</span>
+                        </span>
+                      </div>
+                      <p>
+                        Masukkan alamat email akun Anda. Demi keamanan akun, kami akan mengirimkan tautan pemulihan dan <strong>6-digit kode verifikasi (OTP)</strong> ke kotak masuk email Anda.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
+                        Alamat Email Terdaftar
+                      </label>
+                      <div className="relative">
+                        <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                          mail
+                        </span>
+                        <input
+                          type="email"
+                          required
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          placeholder="contoh: agent@asetrumahbatam.com"
+                          className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="flex-1 py-3 px-4 rounded-xl bg-[#0051d5] hover:bg-[#316bf3] active:scale-98 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {loading ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Mengirim Kode...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">send</span>
+                            <span>Kirim Kode Verifikasi ke Email</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchTab('login')}
+                        className="py-3 px-4 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                    </div>
+
+                    {/* Panduan SMTP / Resend jika modal tersedia */}
+                    {onOpenSupabaseModal && (
+                      <div className="pt-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => onOpenSupabaseModal('resend')}
+                          className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#0051d5] font-medium transition-colors cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">settings</span>
+                          <span>Pengaturan Pengiriman Email (Resend.com)</span>
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                ) : (
+                  /* TAHAP 2: VERIFIKASI KODE 6-DIGIT DARI EMAIL & ATUR SANDI BARU */
+                  <div className="space-y-4 animate-in fade-in">
+                    {/* Ringkasan Pengiriman */}
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <span className="material-symbols-outlined text-[20px]">mark_email_read</span>
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-emerald-900 leading-tight">
+                            Kode Verifikasi Telah Dikirim!
+                          </h4>
+                          <p className="text-[11px] text-emerald-700 mt-0.5">
+                            Dikirim ke <strong className="text-emerald-950">{forgotEmail}</strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-emerald-900 leading-relaxed font-normal">
+                        Periksa kotak masuk (atau folder spam) email Anda. Masukkan <strong>6-digit kode OTP</strong> di bawah ini untuk memverifikasi kepemilikan akun Anda sebelum membuat kata sandi baru.
+                      </p>
+                    </div>
+
+                    {/* FORM VERIFIKASI KODE & SET KATA SANDI BARU */}
+                    <form onSubmit={handleVerifyOtpAndReset} className="space-y-3.5 bg-white p-4 sm:p-5 rounded-2xl border border-blue-200/80 shadow-sm">
+                      <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                        <h4 className="font-bold text-xs text-[#0e1c2f] flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[#0051d5] text-[18px]">verified_user</span>
+                          <span>Verifikasi Kode &amp; Kata Sandi Baru</span>
+                        </h4>
+                        <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 font-bold px-2 py-0.5 rounded-full">
+                          Wajib Verifikasi
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
+                          6-Digit Kode Verifikasi (OTP) dari Email
+                        </label>
+                        <div className="relative">
+                          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                            pin
+                          </span>
                           <input
                             type="text"
-                            value={recoveryInputUrl}
-                            onChange={(e) => setRecoveryInputUrl(e.target.value)}
-                            placeholder="Tempel tautan email di sini..."
-                            className="flex-1 bg-white rounded-lg px-2.5 py-1.5 text-xs font-mono text-[#0e1c2f] border border-gray-300 focus:outline-none focus:ring-1 focus:ring-[#0051d5]"
+                            required
+                            maxLength={6}
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                            placeholder="contoh: 482910"
+                            className="w-full pl-10 pr-4 py-2.5 sm:py-3 rounded-xl border-2 border-blue-300 bg-blue-50/30 text-[#0e1c2f] font-mono text-base font-black tracking-widest outline-none focus:border-[#0051d5] focus:bg-white transition-all placeholder:text-gray-400 placeholder:font-normal placeholder:tracking-normal placeholder:text-xs"
+                          />
+                        </div>
+                        <p className="mt-1 text-[11px] text-gray-500">
+                          Ketik 6 angka kode rahasia yang tertera pada email yang kami kirimkan.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
+                          Kata Sandi Baru (Minimal 6 Karakter)
+                        </label>
+                        <div className="relative">
+                          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                            lock
+                          </span>
+                          <input
+                            type={showOtpNewPassword ? 'text' : 'password'}
+                            required
+                            value={otpNewPassword}
+                            onChange={(e) => setOtpNewPassword(e.target.value)}
+                            placeholder="Masukkan kata sandi baru"
+                            className="w-full pl-10 pr-10 py-2.5 sm:py-3 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
                           />
                           <button
                             type="button"
-                            disabled={recoveryActivating || !recoveryInputUrl.trim()}
-                            onClick={handleActivateManualRecovery}
-                            className="bg-[#0051d5] hover:bg-[#316bf3] text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                            onClick={() => setShowOtpNewPassword(!showOtpNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
                           >
-                            {recoveryActivating ? 'Aktivasi...' : 'Aktivasi'}
+                            <span className="material-symbols-outlined text-[18px]">
+                              {showOtpNewPassword ? 'visibility_off' : 'visibility'}
+                            </span>
                           </button>
                         </div>
                       </div>
-                    )}
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#0e1c2f] mb-1.5">
+                          Konfirmasi Kata Sandi Baru
+                        </label>
+                        <div className="relative">
+                          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                            lock_reset
+                          </span>
+                          <input
+                            type={showOtpConfirmPassword ? 'text' : 'password'}
+                            required
+                            value={otpConfirmPassword}
+                            onChange={(e) => setOtpConfirmPassword(e.target.value)}
+                            placeholder="Ketik ulang kata sandi baru"
+                            className="w-full pl-10 pr-10 py-2.5 sm:py-3 rounded-xl border border-gray-200 focus:border-[#0051d5] focus:ring-2 focus:ring-[#0051d5]/20 text-xs sm:text-sm outline-none transition-all placeholder:text-gray-400 font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowOtpConfirmPassword(!showOtpConfirmPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer p-1"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">
+                              {showOtpConfirmPassword ? 'visibility_off' : 'visibility'}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={otpSubmitting || !otpCode.trim() || !otpNewPassword}
+                        className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {otpSubmitting ? (
+                          <>
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            <span>Memverifikasi Kode &amp; Menyimpan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                            <span>Verifikasi Kode &amp; Simpan Kata Sandi</span>
+                          </>
+                        )}
+                      </button>
+                    </form>
+
+                    {/* Resend Box dengan Cooldown Timer */}
+                    <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-gray-700">Belum menerima kode OTP di email?</span>
+                        {resendCountdown > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-extrabold text-[11px] flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[13px] animate-spin">timelapse</span>
+                            <span>{resendCountdown}s</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          disabled={resending || resendCountdown > 0}
+                          onClick={handleResendForgot}
+                          className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs ${
+                            resendCountdown > 0 || resending
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                              : 'bg-[#0051d5] hover:bg-[#316bf3] text-white active:scale-95'
+                          }`}
+                        >
+                          <span className={`material-symbols-outlined text-[17px] ${resending ? 'animate-spin' : ''}`}>
+                            {resending ? 'progress_activity' : 'forward_to_inbox'}
+                          </span>
+                          <span>
+                            {resending
+                              ? 'Mengirim Ulang...'
+                              : resendCountdown > 0
+                              ? `Kirim Ulang (${resendCountdown}s)`
+                              : 'Kirim Ulang Kode OTP'}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForgotSent(false);
+                            setOtpCode('');
+                            handleClearAlerts();
+                          }}
+                          className="py-2.5 px-3.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">edit</span>
+                          <span>Ganti Email</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchTab('login')}
+                        className="text-xs text-gray-600 hover:text-[#0051d5] font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">arrow_back</span>
+                        <span>Sudah ingat kata sandi? Masuk ke Akun</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
