@@ -14,6 +14,7 @@ import {
   activateRecoverySessionFromUrl,
   verifyOtpAndResetPassword,
   getAuthRedirectBaseUrl,
+  getStoredUser,
   DEFAULT_PRODUCTION_URL
 } from '../lib/auth';
 import { getSupabaseConfig } from '../lib/supabase';
@@ -71,7 +72,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [showOtpNewPassword, setShowOtpNewPassword] = useState(false);
   const [showOtpConfirmPassword, setShowOtpConfirmPassword] = useState(false);
   const [otpSubmitting, setOtpSubmitting] = useState(false);
-  const [showDirectOtpMode, setShowDirectOtpMode] = useState(false);
 
   // Recovery URL / Token Paste State (Solusi error redirect ke localhost)
   const [showRecoveryPaste, setShowRecoveryPaste] = useState(false);
@@ -412,8 +412,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         setOtpNewPassword('');
         setOtpConfirmPassword('');
         setTimeout(() => {
-          handleSwitchTab('login');
-        }, 1500);
+          const profile = res.user || getStoredUser();
+          if (profile) {
+            onLoginSuccess(profile);
+          } else {
+            handleSwitchTab('login');
+          }
+        }, 1200);
       } else {
         setErrorMsg(res.message);
       }
@@ -447,13 +452,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         if (otpRes.success) {
           setSuccessMsg(otpRes.message);
           setTimeout(() => {
-            setLoginEmail(forgotEmail);
-            setLoginPassword('');
-            setNewPassword('');
-            setConfirmNewPassword('');
-            setOtpCode('');
-            handleSwitchTab('login');
-          }, 1500);
+            const profile = otpRes.user || getStoredUser();
+            if (profile) {
+              onLoginSuccess(profile);
+            } else {
+              setLoginEmail(forgotEmail);
+              setLoginPassword('');
+              setNewPassword('');
+              setConfirmNewPassword('');
+              setOtpCode('');
+              handleSwitchTab('login');
+            }
+          }, 1200);
           return;
         } else {
           setErrorMsg(otpRes.message);
@@ -464,22 +474,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       // 2. Gunakan sesi pemulihan aktif yang ada
       const res = await updateUserPassword(newPassword);
       if (res.success) {
-        setSuccessMsg(res.message || 'Kata sandi berhasil diperbarui! Mengalihkan ke form masuk...');
+        setSuccessMsg(res.message || 'Kata sandi berhasil diperbarui! Mengalihkan ke dashboard...');
         setTimeout(() => {
-          if (forgotEmail) {
-            setLoginEmail(forgotEmail);
+          const profile = res.user || getStoredUser();
+          if (profile) {
+            onLoginSuccess(profile);
+          } else {
+            if (forgotEmail) {
+              setLoginEmail(forgotEmail);
+            }
+            setLoginPassword('');
+            setNewPassword('');
+            setConfirmNewPassword('');
+            handleSwitchTab('login');
           }
-          setLoginPassword('');
-          setNewPassword('');
-          setConfirmNewPassword('');
-          handleSwitchTab('login');
-        }, 1500);
+        }, 1200);
       } else {
-        // Jika sesi belum aktif atau kadaluarsa, arahkan ke input OTP
-        if (res.message?.toLowerCase().includes('sesi') || res.message?.toLowerCase().includes('otp')) {
-          setShowDirectOtpMode(true);
-          handleSwitchTab('forgot');
-        }
         setErrorMsg(res.message || 'Gagal mengubah kata sandi.');
       }
     } catch (err: any) {
@@ -876,8 +886,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         </div>
                       </div>
 
-                      <div className="pt-1 flex flex-wrap items-center gap-2">
-                        {onOpenSupabaseModal && (
+                      {onOpenSupabaseModal && (
+                        <div className="pt-1 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => onOpenSupabaseModal('resend')}
@@ -886,19 +896,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                             <span className="material-symbols-outlined text-[14px]">settings</span>
                             <span>Buka Panduan &amp; Salin SMTP Resend</span>
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowDirectOtpMode(true);
-                            setErrorMsg(null);
-                          }}
-                          className="inline-flex items-center gap-1 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">pin</span>
-                          <span>Beralih ke Input 6-Digit OTP</span>
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1228,10 +1227,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               </form>
             )}
 
-            {/* TAB 3: PEMULIHAN SANDI (LUPA SANDI DENGAN RESEND & OTP VERIFIKASI) */}
+            {/* TAB 3: PEMULIHAN SANDI (LUPA SANDI DENGAN RESEND EMAIL) */}
             {activeTab === 'forgot' && (
               <div className="space-y-4">
-                {!forgotSent && !showDirectOtpMode ? (
+                {!forgotSent ? (
                   <form onSubmit={handleForgotSubmit} className="space-y-4">
                     <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200/60 text-blue-900 text-xs sm:text-sm leading-relaxed space-y-2">
                       <div className="flex items-center justify-between">
@@ -1358,17 +1357,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     </div>
                   </form>
                 ) : (
-                  /* KARTU SUKSES PENGIRIMAN & FORM VERIFIKASI OTP LANGSUNG */
+                  /* KARTU SUKSES PENGIRIMAN EMAIL PEMULIHAN */
                   <div className="space-y-4 animate-in fade-in">
                     {/* Ringkasan Pengiriman */}
-                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-2.5">
+                    <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs sm:text-sm space-y-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                          <span className="material-symbols-outlined text-[24px]">mark_email_read</span>
+                        <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <span className="material-symbols-outlined text-[26px]">mark_email_read</span>
                         </div>
                         <div>
                           <h4 className="font-bold text-sm sm:text-base text-emerald-900 leading-tight">
-                            Tautan &amp; Kode Pemulihan Telah Dikirim!
+                            Tautan Pemulihan Berhasil Dikirim!
                           </h4>
                           <p className="text-xs text-emerald-700 mt-0.5">
                             Dikirim ke <strong className="text-emerald-950">{forgotEmail}</strong> via Resend SMTP
@@ -1376,194 +1375,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         </div>
                       </div>
 
-                      <div className="text-[11px] sm:text-xs text-emerald-800 leading-relaxed space-y-1.5 font-normal">
+                      <div className="text-[12px] text-emerald-900 leading-relaxed space-y-1.5 font-normal">
                         <p>
-                          Buka kotak masuk atau folder spam email Anda:
+                          Silakan periksa kotak masuk atau folder spam email Anda.
                         </p>
-                        <ul className="list-disc list-inside space-y-1 text-emerald-950 font-medium">
-                          <li>
-                            <strong>Jika email berisi tautan / tombol:</strong> Cukup <strong>klik tombol "Reset password"</strong> di dalam email Anda untuk langsung membuat kata sandi baru (tidak butuh kode OTP).
-                          </li>
-                          <li>
-                            <strong>Jika email berisi 6-digit angka:</strong> Masukkan kode OTP tersebut pada formulir di bawah ini.
-                          </li>
-                        </ul>
+                        <p className="font-semibold text-emerald-950">
+                          Klik tombol <strong>"Reset password"</strong> di dalam email tersebut untuk langsung membuat kata sandi baru akun Anda.
+                        </p>
                       </div>
-                    </div>
-
-                    {/* FORM UTAMA: VERIFIKASI 6-DIGIT OTP LANGSUNG (BEBAS MASALAH LOCALHOST/REDIRECT) */}
-                    <form onSubmit={handleVerifyOtpAndReset} className="p-4 sm:p-5 rounded-2xl bg-white border-2 border-[#0051d5] shadow-lg shadow-[#0051d5]/5 space-y-4">
-                      <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                        <div className="flex items-center gap-2">
-                          <span className="w-7 h-7 rounded-xl bg-[#0051d5] text-white flex items-center justify-center font-black text-xs">
-                            1
-                          </span>
-                          <div>
-                            <h4 className="font-bold text-xs sm:text-sm text-[#0e1c2f]">
-                              Punya 6-Digit Kode OTP dari Email?
-                            </h4>
-                            <p className="text-[10px] text-gray-500">
-                              Masukkan kode OTP jika template email Anda menyertakan 6 angka
-                            </p>
-                          </div>
-                        </div>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                          Bebas Redirect
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-bold text-[#0e1c2f] mb-1">
-                            Alamat Email Akun
-                          </label>
-                          <input
-                            type="email"
-                            required
-                            value={forgotEmail}
-                            onChange={(e) => setForgotEmail(e.target.value)}
-                            placeholder="nama@email.com"
-                            className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm outline-none focus:border-[#0051d5] font-medium"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-[#0e1c2f] mb-1 flex items-center justify-between">
-                            <span>6-Digit Kode OTP</span>
-                            <span className="text-[10px] text-gray-400 font-normal">Dari email</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={otpCode}
-                            onChange={(e) => setOtpCode(e.target.value)}
-                            placeholder="contoh: 482910"
-                            className="w-full px-3 py-2.5 rounded-xl border-2 border-blue-400 bg-blue-50/40 text-[#0e1c2f] font-mono text-base font-black tracking-widest outline-none focus:border-[#0051d5] focus:bg-white transition-all placeholder:text-gray-400 placeholder:font-normal placeholder:tracking-normal placeholder:text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <p className="text-[11px] text-gray-500 bg-blue-50/60 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
-                        💡 <strong>Catatan Penting:</strong> Email bawaan Supabase biasanya <strong>hanya berisi tombol tautan</strong> tanpa 6-digit angka. Jika di email Anda hanya ada tombol/link, silakan <strong>klik langsung tombol di email tersebut</strong> atau gunakan menu aktivasi manual di bawah.
-                      </p>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-bold text-[#0e1c2f] mb-1">
-                            Kata Sandi Baru (Min. 6 Karakter)
-                          </label>
-                          <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
-                              lock
-                            </span>
-                            <input
-                              type={showOtpNewPassword ? 'text' : 'password'}
-                              required
-                              value={otpNewPassword}
-                              onChange={(e) => setOtpNewPassword(e.target.value)}
-                              placeholder="Masukkan kata sandi baru"
-                              className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm outline-none focus:border-[#0051d5] font-medium"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowOtpNewPassword(!showOtpNewPassword)}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">
-                                {showOtpNewPassword ? 'visibility_off' : 'visibility'}
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-[#0e1c2f] mb-1">
-                            Ulangi Kata Sandi Baru
-                          </label>
-                          <div className="relative">
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
-                              lock_reset
-                            </span>
-                            <input
-                              type={showOtpConfirmPassword ? 'text' : 'password'}
-                              required
-                              value={otpConfirmPassword}
-                              onChange={(e) => setOtpConfirmPassword(e.target.value)}
-                              placeholder="Ulangi kata sandi baru"
-                              className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm outline-none focus:border-[#0051d5] font-medium"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowOtpConfirmPassword(!showOtpConfirmPassword)}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">
-                                {showOtpConfirmPassword ? 'visibility_off' : 'visibility'}
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={otpSubmitting}
-                        className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        {otpSubmitting ? (
-                          <>
-                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                            <span>Memverifikasi &amp; Menyimpan Kata Sandi...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                            <span>Verifikasi Kode &amp; Simpan Kata Sandi Baru</span>
-                          </>
-                        )}
-                      </button>
-                    </form>
-
-                    {/* CARA 2: LINK EMAIL & ALAT AKTIVASI LOCALHOST */}
-                    <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 text-xs space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowRecoveryPaste(!showRecoveryPaste)}
-                        className="w-full flex items-center justify-between font-bold text-gray-700 hover:text-[#0051d5] transition-colors cursor-pointer text-left"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[16px] text-amber-600">help_outline</span>
-                          <span>Tombol di email mengarah ke localhost? (Tempel Tautan Manual)</span>
-                        </span>
-                        <span className="material-symbols-outlined text-[18px]">
-                          {showRecoveryPaste ? 'expand_less' : 'expand_more'}
-                        </span>
-                      </button>
-
-                      {showRecoveryPaste && (
-                        <div className="pt-1.5 space-y-2 animate-in fade-in">
-                          <p className="text-[11px] text-gray-500 leading-relaxed">
-                            Jika link di email Anda mengarahkan ke <code>http://localhost:3000/...</code>, salin seluruh tautan tersebut lalu tempel di bawah:
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-2">
-                            <input
-                              type="text"
-                              value={recoveryInputUrl}
-                              onChange={(e) => setRecoveryInputUrl(e.target.value)}
-                              placeholder="Tempel tautan email: http://localhost:3000/#access_token=..."
-                              className="flex-1 bg-white rounded-xl px-3 py-2 text-xs font-mono text-[#0e1c2f] border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
-                            />
-                            <button
-                              type="button"
-                              disabled={recoveryActivating || !recoveryInputUrl.trim()}
-                              onClick={handleActivateManualRecovery}
-                              className="bg-[#0051d5] hover:bg-[#316bf3] text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1 shrink-0"
-                            >
-                              {recoveryActivating ? 'Mengaktifkan...' : 'Aktivasi'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
 
                     {/* Resend Box dengan Cooldown Timer */}
@@ -1596,8 +1415,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                             {resending
                               ? 'Mengirim Ulang...'
                               : resendCountdown > 0
-                              ? `Kirim Ulang Tautan (${resendCountdown} detik)`
-                              : 'Kirim Ulang Tautan Sekarang'}
+                              ? `Kirim Ulang Email (${resendCountdown}s)`
+                              : 'Kirim Ulang Email Sekarang'}
                           </span>
                         </button>
 
@@ -1605,7 +1424,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                           type="button"
                           onClick={() => {
                             setForgotSent(false);
-                            setShowDirectOtpMode(false);
                             handleClearAlerts();
                           }}
                           className="py-3 px-3.5 rounded-xl border border-gray-200 text-gray-700 hover:bg-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
@@ -1723,20 +1541,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     className="py-3 px-4 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
                   >
                     Batal
-                  </button>
-                </div>
-
-                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/70 text-xs flex items-center justify-between">
-                  <span className="text-blue-950 text-[11px]">Sesi kadaluarsa atau ingin verifikasi dengan kode OTP?</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowDirectOtpMode(true);
-                      handleSwitchTab('forgot');
-                    }}
-                    className="text-[#0051d5] font-bold hover:underline cursor-pointer text-[11px] shrink-0"
-                  >
-                    Gunakan 6-Digit OTP →
                   </button>
                 </div>
               </form>

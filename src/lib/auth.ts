@@ -70,6 +70,8 @@ export function getStoredUser(): UserProfile | null {
   }
 }
 
+export const getCurrentUser = getStoredUser;
+
 /**
  * Save user profile to localStorage and notify listeners
  */
@@ -783,7 +785,7 @@ export async function verifyOtpAndResetPassword(
   email: string,
   token: string,
   newPassword?: string
-): Promise<{ success: boolean; message: string; session?: any }> {
+): Promise<{ success: boolean; message: string; session?: any; user?: UserProfile }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanToken = token.trim();
 
@@ -800,9 +802,12 @@ export async function verifyOtpAndResetPassword(
   // Jika akun demo
   const isDemo = Object.values(DEMO_USERS).some((u) => u.email.toLowerCase() === cleanEmail);
   if (isDemo) {
+    const demoUser = Object.values(DEMO_USERS).find((u) => u.email.toLowerCase() === cleanEmail) || DEMO_USERS.agent;
+    setStoredUser(demoUser);
     return {
       success: true,
       message: 'Akun demo terverifikasi! Anda dapat langsung masuk ke sistem.',
+      user: demoUser,
     };
   }
 
@@ -833,9 +838,27 @@ export async function verifyOtpAndResetPassword(
           sessionStorage.removeItem('arb_recovery_otp_' + cleanEmail);
           localStorage.removeItem('arb_recovery_otp_' + cleanEmail);
         } catch (e) {}
+        let userProfile: UserProfile | null = null;
+        try {
+          const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+            JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+          const found = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+          if (found) userProfile = found.profile;
+        } catch (e) {}
+        if (!userProfile) {
+          userProfile = {
+            id: 'user_' + Date.now(),
+            email: cleanEmail,
+            fullName: cleanEmail.split('@')[0],
+            role: 'agent',
+            phone: '',
+          };
+        }
+        setStoredUser(userProfile);
         return {
           success: true,
-          message: 'Kode verifikasi valid & Kata sandi baru berhasil disimpan! Mengalihkan ke form masuk...',
+          message: 'Kode verifikasi valid & Kata sandi baru berhasil disimpan! Mengalihkan ke dashboard...',
+          user: userProfile,
         };
       }
       return {
@@ -864,9 +887,27 @@ export async function verifyOtpAndResetPassword(
       if (newPassword) {
         const localReset = resetLocalUserPassword(cleanEmail, newPassword);
         if (localReset.success) {
+          let userProfile: UserProfile | null = null;
+          try {
+            const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
+              JSON.parse(localStorage.getItem('arb_registered_users') || '[]');
+            const found = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+            if (found) userProfile = found.profile;
+          } catch (e) {}
+          if (!userProfile) {
+            userProfile = {
+              id: 'user_' + Date.now(),
+              email: cleanEmail,
+              fullName: cleanEmail.split('@')[0],
+              role: 'agent',
+              phone: '',
+            };
+          }
+          setStoredUser(userProfile);
           return {
             success: true,
-            message: 'Kata sandi baru berhasil disimpan! Silakan masuk dengan kata sandi baru Anda.',
+            message: 'Kata sandi baru berhasil disimpan! Mengalihkan ke dashboard...',
+            user: userProfile,
           };
         }
       }
@@ -918,10 +959,17 @@ export async function verifyOtpAndResetPassword(
         }
       } catch (e) {}
 
+      let userProfile: UserProfile | null = null;
+      if (verifyRes.data?.session?.user) {
+        userProfile = mapSupabaseUserToProfile(verifyRes.data.session.user);
+        setStoredUser(userProfile);
+      }
+
       return {
         success: true,
-        message: 'Kata sandi baru berhasil disimpan! Silakan masuk dengan kata sandi baru Anda.',
+        message: 'Kata sandi baru berhasil disimpan! Mengalihkan ke dashboard...',
         session: verifyRes.data.session,
+        user: userProfile || undefined,
       };
     }
 
@@ -1143,7 +1191,7 @@ export async function updateUserProfile(updates: {
 /**
  * Update user password in Supabase Auth
  */
-export async function updateUserPassword(newPassword: string): Promise<{ success: boolean; message: string }> {
+export async function updateUserPassword(newPassword: string): Promise<{ success: boolean; message: string; user?: UserProfile }> {
   if (!newPassword || newPassword.length < 6) {
     return { success: false, message: 'Kata sandi minimal 6 karakter demi keamanan akun Anda.' };
   }
@@ -1155,6 +1203,7 @@ export async function updateUserPassword(newPassword: string): Promise<{ success
     return {
       success: true,
       message: `Kata sandi akun ${currentUser.role === 'admin' ? 'Administrator' : 'Agent'} (mode demo) berhasil diperbarui untuk sesi pengujian lokal Anda.`,
+      user: currentUser,
     };
   }
 
@@ -1172,7 +1221,7 @@ export async function updateUserPassword(newPassword: string): Promise<{ success
         }
       } catch (e) {}
     }
-    return { success: true, message: 'Kata sandi akun berhasil diperbarui secara lokal.' };
+    return { success: true, message: 'Kata sandi akun berhasil diperbarui secara lokal.', user: currentUser || undefined };
   }
 
   try {
@@ -1192,6 +1241,7 @@ export async function updateUserPassword(newPassword: string): Promise<{ success
             return {
               success: true,
               message: 'Kata sandi akun lokal Anda berhasil diperbarui!',
+              user: registeredUsers[idx].profile || currentUser,
             };
           }
         } catch (e) {}
@@ -1214,6 +1264,12 @@ export async function updateUserPassword(newPassword: string): Promise<{ success
 
     // Sinkronkan ke local storage jika email terdaftar
     const userEmail = data?.user?.email || currentUser?.email;
+    let updatedProfile: UserProfile | null = currentUser;
+    if (data?.user) {
+      updatedProfile = mapSupabaseUserToProfile(data.user);
+      setStoredUser(updatedProfile);
+    }
+
     if (userEmail) {
       try {
         const registeredUsers: Array<{ email: string; password: string; profile: UserProfile }> =
@@ -1226,7 +1282,11 @@ export async function updateUserPassword(newPassword: string): Promise<{ success
       } catch (e) {}
     }
 
-    return { success: true, message: 'Kata sandi baru berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.' };
+    return {
+      success: true,
+      message: 'Kata sandi baru berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.',
+      user: updatedProfile || undefined,
+    };
   } catch (err: any) {
     return { success: false, message: err.message || 'Gagal mengubah kata sandi.' };
   }

@@ -6,7 +6,8 @@ import {
   signOutUser, 
   demoLogin, 
   updateUserProfile, 
-  updateUserPassword 
+  updateUserPassword,
+  verifyOtpAndResetPassword 
 } from '../lib/auth';
 import { 
   getSupabase, 
@@ -169,6 +170,22 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // In-Dashboard 6-Digit OTP Verification States
+  const [otpEmail, setOtpEmail] = useState(user.email);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpNewPassword, setOtpNewPassword] = useState('');
+  const [otpConfirmPassword, setOtpConfirmPassword] = useState('');
+  const [showOtpNewPassword, setShowOtpNewPassword] = useState(false);
+  const [showOtpConfirmPassword, setShowOtpConfirmPassword] = useState(false);
+  const [otpSubmitting, setOtpSubmitting] = useState(false);
+  const [otpMsg, setOtpMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (user.email && !otpEmail) {
+      setOtpEmail(user.email);
+    }
+  }, [user.email]);
 
   // Interactive KPR Calculator States
   const [calcPropertyPrice, setCalcPropertyPrice] = useState<number>(1500000000);
@@ -927,6 +944,52 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
       console.error(err);
     } finally {
       setIsBookingQuick(false);
+    }
+  };
+
+  // Verifikasi 6-Digit OTP Pemulihan & Ganti Sandi langsung dari Dashboard
+  const handleVerifyOtpInDashboard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpMsg(null);
+
+    const cleanEmail = (otpEmail || user.email).trim().toLowerCase();
+    const cleanOtp = otpCode.trim();
+
+    if (!cleanEmail) {
+      setOtpMsg({ type: 'error', text: 'Mohon masukkan alamat email akun Anda.' });
+      return;
+    }
+    if (!cleanOtp) {
+      setOtpMsg({ type: 'error', text: 'Mohon masukkan 6-digit kode OTP dari email pemulihan.' });
+      return;
+    }
+    if (!otpNewPassword || otpNewPassword.length < 6) {
+      setOtpMsg({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
+      return;
+    }
+    if (otpNewPassword !== otpConfirmPassword) {
+      setOtpMsg({ type: 'error', text: 'Konfirmasi kata sandi baru tidak cocok. Mohon periksa kembali.' });
+      return;
+    }
+
+    setOtpSubmitting(true);
+    try {
+      const res = await verifyOtpAndResetPassword(cleanEmail, cleanOtp, otpNewPassword);
+      if (res.success) {
+        setOtpMsg({ type: 'success', text: res.message || 'Kata sandi berhasil diperbarui menggunakan kode OTP!' });
+        setOtpCode('');
+        setOtpNewPassword('');
+        setOtpConfirmPassword('');
+        if (res.user) {
+          onUpdateUser(res.user);
+        }
+      } else {
+        setOtpMsg({ type: 'error', text: res.message || 'Gagal memverifikasi kode OTP.' });
+      }
+    } catch (err: any) {
+      setOtpMsg({ type: 'error', text: err.message || 'Terjadi kesalahan sistem saat verifikasi kode.' });
+    } finally {
+      setOtpSubmitting(false);
     }
   };
 
@@ -2747,42 +2810,177 @@ export const DashboardUserPage: React.FC<DashboardUserPageProps> = ({
               </div>
             </div>
 
-            {/* Quick Demo Switcher for Testing Roles */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff]">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="material-symbols-outlined text-amber-500 text-[20px]">switch_account</span>
-                <h3 className="text-base font-bold text-[#0e1c2f]">Ganti Peran Demo (Testing Cepat)</h3>
+            {/* Right Column: Demo Switcher & OTP Verification Form */}
+            <div className="space-y-6">
+              {/* Quick Demo Switcher for Testing Roles */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-[#eff4ff]">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="material-symbols-outlined text-amber-500 text-[20px]">switch_account</span>
+                  <h3 className="text-base font-bold text-[#0e1c2f]">Ganti Peran Demo (Testing Cepat)</h3>
+                </div>
+                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                  Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Agent atau Admin tanpa perlu logout.
+                </p>
+
+                <div className="space-y-2.5">
+                  <button
+                    onClick={() => onUpdateUser(demoLogin('agent'))}
+                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                      user.role === 'agent' ? 'border-emerald-500 bg-emerald-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-[#0e1c2f]">👔 Hendra Wijaya (Agent Properti ARB)</p>
+                      <p className="text-[11px] text-gray-500">Kelola portofolio listing, closing komisi &amp; jadwal survei</p>
+                    </div>
+                    {user.role === 'agent' && <span className="text-xs text-emerald-600 font-bold">Sedang Aktif</span>}
+                  </button>
+
+                  <button
+                    onClick={() => onUpdateUser(demoLogin('admin'))}
+                    className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                      user.role === 'admin' ? 'border-rose-500 bg-rose-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-[#0e1c2f]">🛡️ Admin Utama (Administrator)</p>
+                      <p className="text-[11px] text-gray-500">Akses penuh pengelolaan listing &amp; pengguna</p>
+                    </div>
+                    {user.role === 'admin' && <span className="text-xs text-rose-600 font-bold">Sedang Aktif</span>}
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                Anda dapat beralih peran seketika untuk menguji tampilan dashboard MVP dari sudut pandang Agent atau Admin tanpa perlu logout.
-              </p>
 
-              <div className="space-y-2.5">
-                <button
-                  onClick={() => onUpdateUser(demoLogin('agent'))}
-                  className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                    user.role === 'agent' ? 'border-emerald-500 bg-emerald-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-bold text-[#0e1c2f]">👔 Hendra Wijaya (Agent Properti ARB)</p>
-                    <p className="text-[11px] text-gray-500">Kelola portofolio listing, closing komisi & jadwal survei</p>
+              {/* Card: Punya 6-Digit Kode OTP dari Email? */}
+              <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xs border-2 border-[#0051d5]/30 space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#0051d5] text-[22px]">pin</span>
+                    <div>
+                      <h3 className="text-base font-bold text-[#0e1c2f]">Punya 6-Digit Kode OTP dari Email?</h3>
+                      <p className="text-[11px] text-gray-500">Verifikasi kode OTP pemulihan dan perbarui kata sandi akun Anda</p>
+                    </div>
                   </div>
-                  {user.role === 'agent' && <span className="text-xs text-emerald-600 font-bold">Sedang Aktif</span>}
-                </button>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-[#0051d5]">
+                    Resend OTP
+                  </span>
+                </div>
 
-                <button
-                  onClick={() => onUpdateUser(demoLogin('admin'))}
-                  className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                    user.role === 'admin' ? 'border-rose-500 bg-rose-50/60 font-bold' : 'border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-bold text-[#0e1c2f]">🛡️ Admin Utama (Administrator)</p>
-                    <p className="text-[11px] text-gray-500">Akses penuh pengelolaan listing & pengguna</p>
+                {otpMsg && (
+                  <div
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                      otpMsg.type === 'success'
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800 font-medium'
+                        : 'bg-red-50 border border-red-200 text-red-700'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      {otpMsg.type === 'success' ? 'check_circle' : 'error'}
+                    </span>
+                    <span>{otpMsg.text}</span>
                   </div>
-                  {user.role === 'admin' && <span className="text-xs text-rose-600 font-bold">Sedang Aktif</span>}
-                </button>
+                )}
+
+                <form onSubmit={handleVerifyOtpInDashboard} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block font-bold text-[#0e1c2f] mb-1">
+                      Alamat Email Akun
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={otpEmail}
+                      onChange={(e) => setOtpEmail(e.target.value)}
+                      placeholder="nama@email.com"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-[#0e1c2f] mb-1 flex items-center justify-between">
+                      <span>6-Digit Kode OTP</span>
+                      <span className="text-[10px] text-gray-400 font-normal">Dari email pemulihan</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      placeholder="contoh: 482910"
+                      className="w-full px-3.5 py-2.5 rounded-xl border-2 border-blue-400 bg-blue-50/40 text-[#0e1c2f] font-mono text-base font-black tracking-widest outline-none focus:border-[#0051d5] focus:bg-white transition-all placeholder:text-gray-400 placeholder:font-normal placeholder:tracking-normal placeholder:text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block font-bold text-[#0e1c2f] mb-1">
+                        Kata Sandi Baru
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showOtpNewPassword ? 'text' : 'password'}
+                          required
+                          value={otpNewPassword}
+                          onChange={(e) => setOtpNewPassword(e.target.value)}
+                          placeholder="Min. 6 karakter"
+                          className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowOtpNewPassword(!showOtpNewPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            {showOtpNewPassword ? 'visibility_off' : 'visibility'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-[#0e1c2f] mb-1">
+                        Ulangi Sandi Baru
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showOtpConfirmPassword ? 'text' : 'password'}
+                          required
+                          value={otpConfirmPassword}
+                          onChange={(e) => setOtpConfirmPassword(e.target.value)}
+                          placeholder="Ulangi kata sandi"
+                          className="w-full pl-3 pr-8 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#0051d5]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowOtpConfirmPassword(!showOtpConfirmPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            {showOtpConfirmPassword ? 'visibility_off' : 'visibility'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={otpSubmitting}
+                    className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-bold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {otpSubmitting ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Memverifikasi Kode OTP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">verified</span>
+                        <span>Verifikasi Kode &amp; Simpan Kata Sandi Baru</span>
+                      </>
+                    )}
+                  </button>
+                </form>
               </div>
             </div>
           </div>
